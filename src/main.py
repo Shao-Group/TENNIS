@@ -1,0 +1,617 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2024, Xiaofei Carl Zang, Ke Chen, Mingfu Shao, and The Pennsylvania State University
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+"""
+
+from phylogenTreeSolver import PhylogenTreeSolver
+from GTF import parse as parse_gtf_line
+from typing import List
+from collections import defaultdict
+from collections import Counter
+from sys import argv
+from pprint import pprint, pformat
+import pickle
+from os.path import basename, exists
+from util import *
+import sys
+import os.path
+from datetime import datetime
+import random
+from random_iterator_product import produce_random
+
+class GeneChainToTree():
+    # given chains of a gene (2D matrix)
+    # make binary representation
+    # then construct tree
+    def __init__(self, chains, maxAddlNodes, formulation:str = 'ILPOriginal'):
+        self.formulation = formulation
+        self.chains = chains
+        self.__maxAddlNodes = maxAddlNodes
+        self.__exons = []
+        self.__binaries = []
+        self.__trivial_cols = dict() # col: val
+        self.__get_exons(with_introns = True)
+        self.__chains_to_binaries()
+
+        self.__timed_out = False
+        self.__is_feasible  = False
+        self.__minAddlNodes = -1
+        self.__novel_binaries = [] # multiple solutions (3D) of 2D array
+        self.__novel_info = []
+        self.__contruct_tree()
+        assert self.__is_feasible == (self.__minAddlNodes >= 0)
+
+    def is_feasible(self):
+        return self.__is_feasible
+    
+    def get_minAddlNodes(self):
+        return self.__minAddlNodes
+
+    # use novel binary matrix to return novel feature chains
+    def get_novel_transcripts(self):
+        tsts = [[]] * len(self.__novel_binaries)
+        for i, tx_binary in enumerate(self.__novel_binaries):
+            tsts[i] = [self.__exons[j] for j in range(len(self.__exons)) if is_1(tx_binary[j])]
+        if not self.__is_feasible:
+            assert self.__minAddlNodes == -1
+            assert len(tsts) == 0
+        return tsts
+    
+    def get_tx_info(self):
+        return self.__novel_info
+    
+    def delivery(self):
+        print('print self binaries')
+        pprint(self.__binaries)
+
+    def __get_exons(self, with_introns: bool = True):
+        exons = set()
+        for chain in self.chains:
+            for exon in chain:
+                exons.add(exon)
+        exons = sorted(list(exons)) # collection of all exons
+        if with_introns:
+            introns = []
+            for i in range(len(exons) - 1):
+                ss5 = exons[i][1]
+                ss3 = exons[i + 1][0]
+                if ss5 + 1 >= ss3:
+                    continue    # consecutive exons
+                else:
+                    assert ss5 + 1 <= ss3 - 1
+                    introns.append((ss5 + 1, ss3 - 1))    # make regions non-overlapping
+            exons.extend(introns)
+            exons = sorted(exons)
+        self.__exons = exons
+        # print('exons:', self.__exons)
+        return 0
+
+    def __chains_to_binaries(self):
+        binaries = []
+        for c in self.chains:
+            cbinary = [1 if e in c else 0 for e in self.__exons]
+            binaries.append(cbinary)
+        self.__binaries = binaries
+        return 0
+    
+    def __contruct_tree(self):
+        bmatrix = self.__binaries
+        treeSolver = PhylogenTreeSolver(bmatrix, self.__maxAddlNodes, formulation=self.formulation, printAllVar=True)
+        self.__is_feasible  = treeSolver.is_feasible() 
+        self.__minAddlNodes = treeSolver.get_minAddlNodes()
+        self.__timed_out = treeSolver.is_timed_out()
+        self.__novel_binaries, self.__novel_info = treeSolver.get_novelTx_and_info()
+        print(f'GeneChainToTree feasible? {self.__is_feasible}, Add\'l Nodes {self.__minAddlNodes}')
+        return 0
+    
+    def __random_sol(self, sol_num):
+        bmatrix = self.__binaries
+        self.__is_feasible  = True
+        self.__minAddlNodes = sol_num
+        self.__timed_out = False
+        self.__set_trivial_cols()
+        assert(len(self.__binaries) >= 1)
+        width = len(self.__binaries[0])
+        non_trivial_width = width - len(self.__trivial_cols)
+        known_h = set([hash_as_str([x[i] for i in range(width) if i not in self.__trivial_cols]) for x in self.__binaries])
+        
+        keep = []
+        for r in produce_random(l,r):
+            h = hash_as_str(r)
+            if h in known_h:
+                continue
+            keep.append(r)
+        self.__novel_binaries = keep
+        self.__novel_info = [None] * len(keep)  # make info and binary same length
+        print(f'GeneChainToTree random {sol_num} sols, Add\'l Nodes {self.__minAddlNodes}')
+
+    # self.__trivial_cols = dict() # col: val
+    def __set_trivial_cols(self):
+        assert(len(self.__trivial_cols) == 0)
+        assert(len(self.__binaries) >= 1)
+        width = len(self.__binaries[0])
+        for i in range(width):
+            s = sum([x[i] for x in self.__binaries]) 
+            if s == 0:
+                self.__trivial_cols[i] = 0
+            elif s == len(self.__binaries):
+                self.__trivial_cols[i] = 1
+        return 0
+        
+
+    
+    # remove constitutive positions from matrix
+    def __compress_binaries(self):
+        raise RuntimeError("Do not compress")
+        # does not work with paritial exons
+        binaries = self.__binaries 
+        const_pos = [0] * len(binaries[0]) # -1: empty, 0: non-empty & non-constit, 1: constutive
+
+        vertical_sum = [0] * len(binaries[0])
+        for i in range(len(binaries[0])):
+            vertical_sum[i] = sum([binaries[j][i] for j in range(len(binaries))])
+        assert(len(vertical_sum) == len(binaries[0]))
+
+        count_keep = 0
+        for i in range(len(vertical_sum)):
+            s = vertical_sum[i]
+            if s == 0:
+                const_pos[i] = -1
+            elif s == len(binaries):
+                const_pos[i] = 1
+            else:
+                count_keep += 1
+
+        for i in range(len(binaries)):
+            binaries[i] = [binaries[i][j] for j in range(len(binaries[i])) if const_pos[j] == 0]
+            assert len(binaries[i]) == count_keep
+        
+        self.__binaries = binaries
+        return 0
+
+class Transcriptom():
+    def __init__(self, gtf: str, statsfile='', gtfpredfile='', ignore_single_exon_isoform: bool = True):
+        self.statsfile   = statsfile   if statsfile   != '' else basename(gtf) + '.stats'
+        self.gtfpredfile = gtfpredfile if gtfpredfile != '' else basename(gtf) + '.pred.gtf'
+        if os.path.exists(self.statsfile):
+            print(f"File {self.statsfile} exists. Now removing it.", file=sys.stderr)
+            os.remove(self.statsfile)
+        if os.path.exists(self.gtfpredfile):
+            print(f"File {self.gtfpredfile} exists. Now removing it.", file=sys.stderr)
+            os.remove(self.gtfpredfile)
+        self.ignore_single_exon_isoform = ignore_single_exon_isoform
+        self.maxAddlNodes           = 4
+        self.countSingleIsoformGene = 0
+        self.geneCount              = 0
+        self.bigGene                = 0
+        self.infeasiCount           = 0
+        self.geneAddlnodeCounts     = [0] * (self.maxAddlNodes + 1)
+        self.genes                  = list()
+        self.matrix_gids            = list()
+        self.IsoCountAddlnodeCounts = defaultdict(int)  #d[isoCount, AddlNum] = # occur
+        self.AddlnodeIsoCountCounts = defaultdict(int)  #d[AddlNum, isoCount] = # occur
+        self.isoformsDict           = defaultdict(list)
+        self.genesDict              = defaultdict(list)
+        self.exonMatrixCollection   = list()
+        self.gene2basicinfo         = dict()            #genes2basicinfo[gid] = [fields[x] for x in ['seqname', 'strand', 'frame']]
+        self.parse_gtf(gtf)    
+        
+    def get_trees(self, chain_type: str = 'exon_chain', transcript_group: str = 'gene_level', 
+                  to_save: bool = True, statsfile='', gtfpredfile='',
+                  formulation: str = 'SATSimple'):
+        if statsfile == '':
+            statsfile = self.statsfile
+        if gtfpredfile == '':
+            gtfpredfile = self.gtfpredfile
+        chains_of_all_genes = self.get_chain_matrix(chain_type, transcript_group)
+        assert len(self.matrix_gids) == len(chains_of_all_genes)
+        for i, chains_1_gene in enumerate(chains_of_all_genes):
+            # print('chains in 1 gene:', chains_1_gene)
+            isoN = len(chains_1_gene)
+            gid = self.matrix_gids[i]
+            if isoN == 0:
+                continue
+            self.geneCount += 1
+            if isoN <= 1:
+                self.countSingleIsoformGene += 1
+                continue
+            if isoN >= 100:
+                self.bigGene += 1
+                continue
+            x = GeneChainToTree(chains_1_gene, self.maxAddlNodes, formulation=formulation)
+            self.infeasiCount += 1 if not x.is_feasible() else 0
+            addlN = x.get_minAddlNodes()
+            if x.is_feasible():
+                self.geneAddlnodeCounts[addlN] += 1
+                self.save_novel_gene_in_gtf(x.get_novel_transcripts(), x.get_tx_info(), gid, chain_type, addlN, file=gtfpredfile)
+            self.IsoCountAddlnodeCounts[(addlN, isoN)] += 1
+            self.AddlnodeIsoCountCounts[(isoN, addlN)] += 1 
+
+            if to_save and self.geneCount % 10 == 0:
+                self.save_stats(statsfile)
+        if to_save:
+            self.save_stats(statsfile)
+        return 0
+    
+    def save_stats(self, file=''):
+        if file == '':
+            file = self.statsfile
+        s = []
+        s.append(f'gene count {self.geneCount}')
+        s.append(f'single isoform gene: {self.countSingleIsoformGene}')
+        s.append(f'big gene with 100+ isoforms {self.bigGene }')
+        s.append(f'infeasiible count: {self.infeasiCount}')
+        s.append(f'feasible counts:{str(self.geneAddlnodeCounts)}')     
+        s.append(f'IsoCountAddlnodeCounts:{pformat(self.IsoCountAddlnodeCounts.items())}')
+        s.append(f'AddlnodeIsoCountCounts:{pformat(self.AddlnodeIsoCountCounts.items())}')
+        s.append('\n')
+        with open(file, 'a') as f:
+            f.write('\n'.join(s))
+        return 0
+
+    def save_novel_gene_in_gtf(self, chains, chains_info, gid, chain_type, addlN, file = ''):
+        if addlN <= 0:
+            return 0
+        
+        file = self.gtfpredfile if file == '' else file            
+        assert file.endswith('.gtf')
+        
+        if chain_type == "exon_chain" or chain_type == "pexon_chain":
+            exon_lists = self.__exon_chain_matrix_to_transcripts(chains)
+        elif chain_type == "intron_chain" or chain_type == "pintron_chain":
+            exon_lists = self.__intron_chain_matrix_to_exon_list(chains)
+        else:
+            raise RuntimeError(f"{chain_type} chain type to transript not implemented")
+        
+        f = open(file, 'a')
+        assert len(chains_info) == len(exon_lists)
+        for i, exon_list in enumerate(exon_lists):
+            tsstes = f"s{exon_list[0][1]}_t{exon_list[-1][0]}"
+            tid = gid + "." + tsstes + ".addl."+ str(i + 1)
+            attr_info = f'addl_tx_in_gene \"{addlN}\"; ' + ' '.join([f'{k} "{v}";' for k,v in chains_info[i].items()])
+            f.write(self.__exon_list_to_gtf_lines(exon_list, gid, tid, attr_info))
+        f.close()
+        return 0
+
+    def __exon_list_to_gtf_lines(self, exon_list, gid, tid, attr_info="") -> str:
+        info    = self.gene2basicinfo[gid]
+        seqname = info[0]
+        strand  = info[1]
+        frame   = '.'
+        source  = 'tennis'
+        
+        tx_start = exon_list[0][0]
+        tx_end   = exon_list[-1][1]
+        attr = f"gene_id \"{gid}\"; transcript_id \"{tid}\"; {attr_info}"
+        line     = '\t'.join([seqname, source, 'transcript', str(tx_start), str(tx_end), str(1000), strand, frame, attr]) + '\n'
+        for ex in exon_list:
+            start = ex[0]
+            end   = ex[1]
+            line += '\t'.join([seqname, source, 'exon', str(start), str(end), str(1000), strand, frame, attr]) + '\n'
+        return line
+    
+    def __intron_chain_matrix_to_exon_list(self, chains):
+        intron_chains = self.__condense_list_of_features(chains)
+        exon_lists = []
+        for ichain in intron_chains:
+            exon_chain = list()
+            tss = max(ichain[0][0] - 100, 1) # dummy tss
+            exon_chain.append((tss, ichain[0][0]))
+            for i in range(len(ichain) - 1):
+                exon = (ichain[i][1] + 1, ichain[i + 1][0] - 1)
+                assert exon[0] <= exon[1]
+                exon_chain.append(exon)
+            tes = max(ichain[-1][1], ichain[-1][1] + 100) # dummy tes
+            exon_chain.append((ichain[-1][1], tes))
+            exon_lists.append(exon_chain)
+        return exon_lists
+
+    # condense a list of adjacent exons (can also condense introns etc.)
+    def __condense_list_of_features(self, chains):
+        exon_lists = []
+        for chain in chains:
+            exon_list = []
+            assert len(chain[0]) == 2
+            l = chain[0][0]
+            r = chain[0][1]
+            for i in range(len(chain) - 1): 
+                assert len(chain[i + 1]) == 2
+                r = chain[i][1]
+                l2 = chain[i + 1][0]
+                r2 = chain[i + 1][1]
+                assert r < r2
+                if r == l2 or r + 1 == l2:
+                    r = r2
+                else:
+                    exon_list.append((l,r))
+                    l = l2
+                    r = r2
+            exon_list.append((l,r))
+            exon_lists.append(exon_list)
+        return exon_lists
+
+    def __exon_chain_matrix_to_transcripts(self, chains):
+        return self.__condense_list_of_features(chains)
+
+    def __get_exon_chain_matrix_gene_level(self):
+        self.matrix_gids = self.genes
+        #make sure inclusive & non-overlapping
+        for geneExonMatrix in self.exonMatrixCollection:
+            for isoform in geneExonMatrix:
+                exon_list_valid(isoform)
+        return self.exonMatrixCollection
+
+    def __get_exon_chain_matrix_tsstes_level(self, trim_ends=True):
+        matrix = self.__get_exon_chain_matrix_gene_level()
+        new_matrix = []
+        self.matrix_gids = [] 
+        assert len(self.genes) == len(matrix)
+        for i, chains_1_gene in enumerate(matrix):
+            tsstes_group = defaultdict(list)
+            tsstes_trimmed_ends = dict()
+            for j, chain in enumerate(chains_1_gene):
+                s = chain[0][1]
+                t = chain[-1][0]
+                tsstes = (s,t)
+                tsstes_group[tsstes].append(j)
+                if trim_ends:
+                    if tsstes not in tsstes_trimmed_ends:
+                        tsstes_trimmed_ends[tsstes] = (chain[0][0], chain[-1][1])
+                    else:
+                        tsstes_trimmed_ends[tsstes] = (max(tsstes_trimmed_ends[tsstes][0], chain[0][0]), min(tsstes_trimmed_ends[tsstes][1], chain[-1][1]))
+            for tsstes, chain_indices in tsstes_group.items():
+                s, t = tsstes
+                grouped_chains = [chains_1_gene[x] for x in chain_indices]
+                if trim_ends:
+                    for chain in grouped_chains:
+                        chain[0] = (tsstes_trimmed_ends[tsstes][0], s) 
+                        chain[-1] = (t, tsstes_trimmed_ends[tsstes][1])
+                new_matrix.append(grouped_chains)
+                self.matrix_gids.append(self.genes[i])
+        assert len(self.matrix_gids) == len(new_matrix)
+        return new_matrix
+
+    def get_chain_matrix(self, chain_type: str = 'exon_chain', transcript_group: str = 'tsstes_level'):
+        if transcript_group == 'gene_level':
+            matrix = self.__get_exon_chain_matrix_gene_level()
+        elif transcript_group == 'tsstes_level':
+            matrix = self.__get_exon_chain_matrix_tsstes_level()
+            # examine same tss/tes
+            for group in matrix:
+                assert (len(group) >= 1)
+                s = group[0][0]
+                t = group[0][-1]
+                for isoform in group:
+                    assert isoform[0] == s
+                    assert isoform[-1] == t
+        else:
+            assert 0
+
+        if chain_type == 'exon_chain':
+            matrix = matrix
+        elif chain_type == 'intron_chain':
+            matrix = self.__get_intron_chain_matrix(matrix)
+        elif chain_type == 'pexon_chain' or chain_type == 'partialexon_chain':
+            matrix = self.__get_partialexon_chain_matrix(matrix)
+        elif chain_type == 'pintron_chain' or chain_type == 'partialintron_chain':
+            matrix = self.__get_partialintron_chain_matrix(matrix)
+        else:
+            assert 0
+
+        for i, isoforms in enumerate(matrix): 
+            matrix[i] = self.__remove_duplicated_isoforms(isoforms, self.ignore_single_exon_isoform)
+        return matrix
+
+    def __remove_duplicated_isoforms(self, isoforms, ignore_single_exon_isoform: bool = True):
+        # print('isoforms', isoforms)
+        str_hash_set = set()    
+        new_isoforms = []    
+        for isoform in isoforms:
+            h = hash_as_str(isoform)
+            # print('hash', h, isoform)
+            if ignore_single_exon_isoform and len(isoform) <= 1 :
+                continue
+            if h in str_hash_set:
+                # print('dup!')
+                continue
+            str_hash_set.add(h)
+            new_isoforms.append(isoform)
+        return new_isoforms
+
+    def __get_partialintron_chain_matrix(self, matrix):
+        m = self.__get_intron_chain_matrix(matrix)
+        return self.__get_partial_any_chain_matrix(m)
+
+    # input matrix - inclusive
+    # return matrix - inclusive
+    def __get_partial_any_chain_matrix(self, original_matrix):
+        M = []
+        for isoforms_in_gene in original_matrix:
+            all_sites = set()
+            for exons_in_isoform in isoforms_in_gene:
+                for ex in exons_in_isoform:
+                    all_sites.add(ex[0])  
+                    all_sites.add(ex[1] + 1)  
+            all_sites = sorted(list(all_sites))
+            idx_sites = dict()
+            for idx, site in enumerate(all_sites):
+                idx_sites[site] = idx
+
+            pexonchain_in_gene = []
+            for exons_in_isoform in isoforms_in_gene:
+                pexon_chain = []
+                for ex in exons_in_isoform:
+                    idx1 = idx_sites[ex[0]]
+                    idx2 = idx_sites[ex[1] + 1]
+                    assert idx1 <= idx2
+                    pex_in_ex = []
+                    for i in range(idx1, idx2):
+                        pex_in_ex.append((all_sites[i], all_sites[i + 1] - 1))
+                    if idx1 == idx2:
+                        pex_in_ex.append((all_sites[idx1], all_sites[idx1] - 1))
+                    assert len(pex_in_ex) >= 1
+                    assert pex_in_ex[0][0] == ex[0]
+
+                    for i, pex in enumerate(pex_in_ex):
+                        if i == 0:
+                            assert pex_in_ex[0][0] == ex[0]
+                        elif i == len(pex_in_ex) - 1:
+                            assert pex_in_ex[-1][1] == ex[1]
+                            break
+                        if i < len(pex_in_ex) - 1:
+                            assert pex_in_ex[i][1] < pex_in_ex[i + 1][0] # inclusive
+
+                    pexon_chain.extend(pex_in_ex)
+                pexonchain_in_gene.append(pexon_chain)
+            M.append(pexonchain_in_gene)
+        return M
+
+    def __get_partialexon_chain_matrix(self, matrix):
+        return self.__get_partial_any_chain_matrix(matrix)
+
+    def __get_intron_chain_matrix(self, matrix):
+        M = []
+        for isoforms_in_gene in matrix:
+            intronchain_in_gene = []
+            for exons_in_isoform in isoforms_in_gene:
+                intron_chain = list()
+                if len(exons_in_isoform) <= 1: 
+                    intron_chain.append((0,0))
+                else:
+                    for i in range(len(exons_in_isoform) - 1):
+                        intron = (exons_in_isoform[i][1] + 1, exons_in_isoform[i + 1][0] - 1)
+                        assert intron[0] <= intron[1]
+                        intron_chain.append(intron)
+                intronchain_in_gene.append(intron_chain)
+            M.append(intronchain_in_gene)
+        return M
+
+    def parse_gtf(self, gtf):
+        picklefile = ""
+        if exists(f'{gtf}.pickle'):
+            picklefile = f'{gtf}.pickle'
+        if gtf.endswith('pickle'):
+            picklefile = gtf
+        if picklefile != "":
+            picklehandle = open(picklefile, 'rb')
+            isoform2exons, gene2isoforms, exonMatrixCollection, genes, gene2basicinfo = pickle.load(picklehandle)
+            self.genes                = genes
+            self.isoformsDict         = isoform2exons
+            self.genesDict            = gene2isoforms
+            self.exonMatrixCollection = exonMatrixCollection
+            self.gene2basicinfo       = gene2basicinfo
+            print(f"gtf read from pickle file {picklefile}")
+            picklehandle.close()
+            return 0
+        
+        isoform2exons = defaultdict(list)
+        gene2isoforms = defaultdict(list)
+        gene2basicinfo = dict()
+        isoform2gene  = dict()
+        genes = list()
+        table = list()
+        with open(gtf, 'r') as f:
+            for line in f.readlines():
+                if line.startswith('#'): continue
+                fields = parse_gtf_line(line)
+                table.append(fields)
+                
+                if fields['feature'] == 'transcript':
+                    tid = fields['transcript_id']
+                    gid = fields['gene_id']
+                    assert tid is not None
+                    assert gid is not None
+                    gene2isoforms[gid].append(tid)
+                    if gid not in gene2basicinfo:
+                        gene2basicinfo[gid] = [fields[x] for x in ['seqname', 'strand', 'frame']]
+                        genes.append(gid)
+                if fields['feature'] == 'exon':
+                    tid = fields['transcript_id']
+                    gid = fields['gene_id']
+                    s = int(fields['start'])
+                    t = int(fields['end'])
+                    assert tid is not None
+                    assert gid is not None
+                    assert s is not None
+                    assert t is not None
+                    isoform2exons[tid].append((s,t))
+                    if tid in isoform2gene:
+                        assert isoform2gene[tid] == gid
+                    else:
+                        isoform2gene[tid] = gid
+        for _, exs in isoform2exons.items():
+            exs.sort()
+
+        exonMatrixCollection = []
+        assert (len(gene2isoforms) == len(genes))
+        for g in genes:
+            is_in_g = gene2isoforms[g]
+            exonMatrix = []
+            for i in is_in_g:
+                exonList = isoform2exons[i]
+                exon_list_valid(exonList)
+                exonMatrix.append(exonList)
+            exonMatrixCollection.append(exonMatrix)
+        assert (len(exonMatrixCollection) == len(genes))
+        
+        with open(f'{gtf}.pickle', 'wb') as file:
+            pickle.dump((isoform2exons, gene2isoforms, exonMatrixCollection, genes, gene2basicinfo), file)
+        self.genes                = genes
+        self.isoformsDict         = isoform2exons
+        self.genesDict            = gene2isoforms
+        self.exonMatrixCollection = exonMatrixCollection
+        self.gene2basicinfo       = gene2basicinfo
+        return 0
+
+
+if __name__ == "__main__":
+    # Usage      : python main.py file.gtf <formulation> <chain_type> <group_level>
+    # chain_type : default "pexon_chain", one of ["exon_chain", "pexon_chain", "intron_chain", "pintron_chain"]
+    # group_level: default "gene",       one of ["gene_level", "tsstes_level"]
+    d0 = datetime.today().strftime('%Y-%m-%d')
+    t0 = datetime.today().strftime('%H:%M:%S')
+
+    gtf_file         = argv[1]
+    output_prefix    = basename(gtf_file) if len(argv) <= 2 else argv[2]
+    formulation      = 'SATSimple' 
+    chain_type       = 'pexon_chain'
+    transcript_group = 'tsstes_level' 
+
+    save_basename = output_prefix 
+
+    random.seed(42)
+    tsm = Transcriptom(gtf_file,  f'{save_basename}.stats', f'{save_basename}.pred.gtf')
+    tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats', gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation)
+    
+    d = datetime.today().strftime('%Y-%m-%d')
+    t = datetime.today().strftime('%H:%M:%S')
+    print(f"Task Completed! \nStated at time {d0} {t0} \nFinished at time {d} {t} \nFiles saved in {save_basename}.stats/.pred.gtf")

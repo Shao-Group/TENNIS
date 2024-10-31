@@ -25,7 +25,7 @@ cd TENNIS
 
 This repository also modified and re-distributes GTF.py codes (retrieved from [here](https://gist.github.com/slowkow/8101481?permalink_comment_id=321645i7)) developed by Kamil Slowikowski. Users don't have to re-download it.
 
-### Example
+### Test and Example
 
 ```sh
 # display help message
@@ -36,23 +36,51 @@ cd test
 python ../src/tennis.py ../example/example.gtf tennis_example
 ```
 
-
-
 # **Usage** 
 
 ```sh
-python src/tennis.py <gtf_file> <output_prefix>
+python src/tennis.py [options] -o <output_prefix> <gtf_file> 
 ```
 
 Two files will be output: `output_prefix.stats` and `output_prefix.pred.gtf`
 
+### Required positional arguments:
 
+   gtf_file : str
+       Input GTF file in standard format containing gene and transcript 
+       annotations.
+
+### Optional arguments:
+
+   -h, --help
+
+   -o, --output_prefix : str
+       Default: "tennis"
+
+   -x, --exclude_gene_size : int
+       Skip analysis of transcript groups that have more isoforms than this threshold.
+       Default: 100
+
+   -m, --max_novel_isoform : int
+       Maximum number of novel isoforms to predict per transcript group.
+       Helps control the number of predictions and maintain quality.
+       Default: 4
+
+  --time_out : int, 
+       Time limit in seconds for each SAT solver instance.
+       Default: 900 (15 minutes)
+
+## Output Files
+
+`output_prefix.stats` : 
+	Statistical summary. `T1` ( `T2`,  `T3`, ...) is the collection of transcript groups that need 1 (2, 3, ..,) novel isoforms to satisfy the evolution model.
+
+`output_prefix.pred.gtf` : 
+​	GTF format file with predicted novel isoforms.
 
 # Contributing
 
 For bug reports or feature requests, please open an issue on the GitHub repository.
-
-
 
 # **License**
 

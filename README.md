@@ -13,22 +13,19 @@ TENNIS is an evolution-based model to predict unannotated isoforms and refine ex
 
 ### Installation 
 
-The only dependency of TENNIS is [PySAT](https://pysathq.github.io/). It can be installed via 
+The only dependency of TENNIS is [PySAT](https://pysathq.github.io/), which can be installed with `pip`. TENNIS can be installed by directly cloning this repository.
 
 ```sh
+# install PySAT
 pip install python-sat[aiger,approxmc,cryptosat,pblib]
-```
-
-This repository also modified and re-distributes GTF.py codes (retrieved from [here](https://gist.github.com/slowkow/8101481?permalink_comment_id=321645i7)) developed by Kamil Slowikowski. Users don't have to re-download it.
-
-To install TENNIS, clone this repository.
-
-```bash
+# install TENNIS
 git clone https://github.com/Shao-Group/TENNIS
 cd TENNIS
 ```
 
-To get help message and run an example:
+This repository also modified and re-distributes GTF.py codes (retrieved from [here](https://gist.github.com/slowkow/8101481?permalink_comment_id=321645i7)) developed by Kamil Slowikowski. Users don't have to re-download it.
+
+### Example
 
 ```sh
 # display help message

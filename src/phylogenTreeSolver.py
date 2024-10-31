@@ -52,6 +52,7 @@ class PhylogenTreeSolver():
                  solver: str = '',
                  formulation: str = 'SATSimple',
                  printAllVar: bool = False) -> None:
+
         self.knownTx = knownTx              # a 2D binary matrix for known transcripts
         self.maxEdgeDist = maxEdged 
         self.numKnownTx = len(knownTx)
@@ -501,13 +502,4 @@ def test_array(formulation: str = 'ILPOriginal'):
 
 
 if __name__ == "__main__":
-    test_array(formulation = 'SATSimple')
-
-    if len(sys.argv) == 3:
-        col = int(sys.argv[1])
-        row = int(sys.argv[2])
-        test(col, row)
-    else:
-        test()
-
-    print('isoform phylogen main completed')
+    raise RuntimeError("This module is not meant to be run as a script")

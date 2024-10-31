@@ -226,7 +226,7 @@ class Transcriptom():
         self.gene2basicinfo         = dict()            #genes2basicinfo[gid] = [fields[x] for x in ['seqname', 'strand', 'frame']]
         self.parse_gtf(gtf)    
         
-    def get_trees(self, chain_type: str = 'exon_chain', transcript_group: str = 'gene_level', 
+    def get_trees(self, chain_type: str = 'pexon_chain', transcript_group: str = 'tsstes_level', 
                   to_save: bool = True, statsfile='', gtfpredfile='',
                   formulation: str = 'SATSimple'):
         if statsfile == '':
@@ -646,11 +646,14 @@ if __name__ == "__main__":
 
     random.seed(42)
     tsm = Transcriptom(gtf_file,  f'{save_basename}.stats', f'{save_basename}.pred.gtf')
-    tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats', gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation)
+    # tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats', gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation)
+    tsm.get_trees(statsfile=f'{save_basename}.stats', gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation)
     
     d = datetime.today().strftime('%Y-%m-%d')
     t = datetime.today().strftime('%H:%M:%S')
     print(f"TENNIS completed tunning! \n" + 
-          f"Stated at time {d0} {t0} \n" +
+          f"Started  at time {d0} {t0} \n" +
           f"Finished at time {d} {t} \n" +
-          f"Output files: [{save_basename}.stats] & [{save_basename}.pred.gtf]")
+          f"Output files:\n" +
+          " " * 8 + f"{save_basename}.stats\n"+
+          " " * 8 + f"{save_basename}.pred.gtf")

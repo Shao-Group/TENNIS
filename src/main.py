@@ -47,6 +47,7 @@ import os.path
 from datetime import datetime
 import random
 from random_iterator_product import produce_random
+import argparse
 
 class GeneChainToTree():
     # given chains of a gene (2D matrix)
@@ -125,7 +126,7 @@ class GeneChainToTree():
     
     def __contruct_tree(self):
         bmatrix = self.__binaries
-        treeSolver = PhylogenTreeSolver(bmatrix, self.__maxAddlNodes, formulation=self.formulation, printAllVar=True)
+        treeSolver = PhylogenTreeSolver(bmatrix, self.__maxAddlNodes, formulation=self.formulation, printAllVar=False)
         self.__is_feasible  = treeSolver.is_feasible() 
         self.__minAddlNodes = treeSolver.get_minAddlNodes()
         self.__timed_out = treeSolver.is_timed_out()
@@ -592,21 +593,56 @@ class Transcriptom():
         self.gene2basicinfo       = gene2basicinfo
         return 0
 
+def parse_arguments():
+    """
+    Parses command-line arguments for the script.
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
+    Command-line arguments:
+        gtf_file (str): Input GTF file.
+        --output_prefix (str, optional): Output prefix for stats and prediction files. Default is an empty string.
+        --formulation (str, optional): Formulation type. Choices are "ILPOriginal" and "SATSimple". Default is "SATSimple".
+        --chain_type (str, optional): Type of chain to use. Choices are "exon_chain", "pexon_chain", "intron_chain", and "pintron_chain". Default is "pexon_chain".
+        --transcript_group (str, optional): Transcript grouping level. Choices are "gene_level" and "tsstes_level". Default is "tsstes_level".
+    """
+    
+    # Parse only argv[2:], leaving argv[1] available for your debug purposes
+    is_test = True if (len(sys.argv) > 1 and sys.argv[1] == "test") else False
+    args    = sys.argv[1:] if not is_test else sys.argv[2:]
+
+
+
+    parser = argparse.ArgumentParser(description="Process GTF files to construct gene trees.")
+    
+    parser.add_argument("-o", "--output_prefix",      type=str, default="tennis", help="Output prefix for stats and prediction files")
+    parser.add_argument("-x", "--exclude_group_size", type=int, default=100,      help="Exclude large transcript group with size greater than this value")
+    parser.add_argument("-m", "--max_novel_isoform",  type=int, default=4,        help="Maximum number of allowed novel isoforms in a transcript group")
+    parser.add_argument(      "--time_out",           type=int, default=900,      help="Each SAT instance time out in seconds")
+    if is_test:
+        parser.add_argument("-f", "--formulation", type=str, default="SATSimple", choices=["SATSimple", "Rand1", "RandX"], help="Formulation type")
+    else:
+        parser.formulation = "SATSimple"
+
+    parser.add_argument("gtf_file", type=str, help="Input GTF file")
+    args = parser.parse_args(args)
+    if not is_test:
+        args.formulation = "SATSimple"
+    return args
+
+
 
 if __name__ == "__main__":
-    # Usage      : python main.py file.gtf <formulation> <chain_type> <group_level>
-    # chain_type : default "pexon_chain", one of ["exon_chain", "pexon_chain", "intron_chain", "pintron_chain"]
-    # group_level: default "gene",       one of ["gene_level", "tsstes_level"]
     d0 = datetime.today().strftime('%Y-%m-%d')
     t0 = datetime.today().strftime('%H:%M:%S')
+    
+    args = parse_arguments()
 
-    gtf_file         = argv[1]
-    output_prefix    = basename(gtf_file) if len(argv) <= 2 else argv[2]
-    formulation      = 'SATSimple' 
+    gtf_file         = args.gtf_file
+    formulation      = args.formulation
     chain_type       = 'pexon_chain'
     transcript_group = 'tsstes_level' 
 
-    save_basename = output_prefix 
+    save_basename = args.output_prefix 
 
     random.seed(42)
     tsm = Transcriptom(gtf_file,  f'{save_basename}.stats', f'{save_basename}.pred.gtf')
@@ -614,4 +650,7 @@ if __name__ == "__main__":
     
     d = datetime.today().strftime('%Y-%m-%d')
     t = datetime.today().strftime('%H:%M:%S')
-    print(f"Task Completed! \nStated at time {d0} {t0} \nFinished at time {d} {t} \nFiles saved in {save_basename}.stats/.pred.gtf")
+    print(f"TENNIS completed tunning! \n" + 
+          f"Stated at time {d0} {t0} \n" +
+          f"Finished at time {d} {t} \n" +
+          f"Output files: [{save_basename}.stats] & [{save_basename}.pred.gtf]")

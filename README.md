@@ -33,7 +33,7 @@ python src/tennis.py -h
 # run TENNIS on an example dataset
 mkdir test
 cd test
-python ../src/tennis.py ../example/example.gtf tennis_example
+python ../src/tennis.py -o tennis_example ../example/example.gtf 
 ```
 
 # **Usage** 

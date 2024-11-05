@@ -340,8 +340,9 @@ class Transcriptom():
             tsstes = f"s{exon_list[0][1]}_t{exon_list[-1][0]}"
             tid = gid + "." + tsstes + ".novel."+ str(i + 1)
             # filter low PctIn isoforms
-            if len(chains_info) > 0 and chains_info[i]['PctIn'] < self.args.PctIn_threshold:
-                continue
+            if len(chains_info) > i and 'PctIn' in chains_info[i]:
+                if chains_info[i]['PctIn'] < self.args.PctIn_threshold:
+                    continue
             attr_info = f'novel_transcript_num \"{addlN}\"; ' 
             if len(chains_info) > 0:
                 attr_info += ' '.join([f'{k} "{v}";' for k,v in chains_info[i].items()])

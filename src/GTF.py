@@ -153,7 +153,7 @@ def get_xi_counts(gtf):
         if line.startswith('#'): continue
         fields = parse(line)
         
-        tgroup = fields['transcript_id'].split('.addl')[0]
+        tgroup = fields['transcript_id'].split('.novel')[0]
         gid = fields['gene_id']
         xi = int(fields['novel_transcript_num'])
 

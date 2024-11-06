@@ -103,9 +103,7 @@ class PhylogenTreeSolver():
         # UnDupNovelTxHashs = set()
         groupHashs = set() 
         transHashs2groups = dict()
-        # print('mult Sol', multi_sols)
         for novelGroup in multi_sols:
-            # print('each group in mult sol', novelGroup)
             assert addlNodes == len(novelGroup)
 
             TxHashs = [hash_as_str(tx) for tx in novelGroup]
@@ -161,7 +159,6 @@ class PhylogenTreeSolver():
         b = [sum(i) for i in self.knownTx]
         x = self.numExons * self.numKnownTx - sum(b)
         self.maxAddlNodes = min(x, self.maxAddlNodes)
-        # print(f"PhylogenTreeSolver max number of add'l node is {self.maxAddlNodes}")
         return self.maxAddlNodes
 
     # return `minNum`` needed missing internal nodes to construct a tree
@@ -231,7 +228,6 @@ class PhylogenTreeSolver():
         assert self.minAddlNodes <= 0   # no sol found yet
         idPool = IDPool(start_from = 2) # 0 and 1 reserved for PYSAT_FALSE and PYSAT_TRUE
 
-
         treeSatisfy = []
         
         # vN: all known and unknown tx, represented as binary vector
@@ -276,7 +272,6 @@ class PhylogenTreeSolver():
         # namely, D[i,j] = lpSum(d[i,j]), not used in SAT formulation (only computed between known transcripts)
 
         d = [[[None]*self.numExons for _ in range(N)] for _ in range(N)]
-        # D = [[None]*N for _ in range(N)]
         # only calculate for the known transcripts
         D = [[0]*self.numKnownTx for _ in range(self.numKnownTx)]                          
 

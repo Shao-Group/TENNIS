@@ -123,7 +123,6 @@ class GeneChainToTree():
             exons.extend(introns)
             exons = sorted(exons)
         self.__exons = exons
-        # print('exons:', self.__exons)
         return 0
 
     def __chains_to_binaries(self):
@@ -141,7 +140,6 @@ class GeneChainToTree():
         self.__minAddlNodes = treeSolver.get_minAddlNodes()
         self.__timed_out = treeSolver.is_timed_out()
         self.__novel_binaries, self.__novel_info = treeSolver.get_novelTx_and_info()
-        # print(f'GeneChainToTree feasible? {self.__is_feasible}, Add\'l Nodes {self.__minAddlNodes}')
         return 0
     
     def __random_sol(self, sol_num):
@@ -175,16 +173,16 @@ class GeneChainToTree():
         if len(keep) == 0:
             self.__is_feasible  = False
             self.__minAddlNodes = -1
-            print('nothing to add')
+            # print('nothing to add')
         else:
             self.__is_feasible  = True
             self.__minAddlNodes = sol_num
             # put back random positions 
-            print('trivial col', self.__trivial_cols)
+            # print('trivial col', self.__trivial_cols)
             keepwtrivial = [None] * len(keep)
             for ikeep in range(len(keep)):
                 l = keep[ikeep]
-                print('nontrivial random', l)
+                # print('nontrivial random', l)
                 p = [None] * width # real vector with trivial pos
                 for k, v in self.__trivial_cols.items(): 
                     p[k] = v
@@ -274,7 +272,6 @@ class Transcriptom():
                 assert xi_counts is not None
                 tsstes = f"s{chains_1_gene[0][0][1]}_t{chains_1_gene[0][-1][0]}"
                 txGroup = gid + "." + tsstes 
-                print(f'main txGroup {txGroup}')
                 if formulation != 'RandomAll' and ((txGroup not in xi_counts) or (xi_counts[txGroup] < 1)): continue
                 randOutNum = xi_counts[txGroup] if formulation == 'RandomX' else 1
                 x = GeneChainToTree(chains_1_gene, randOutNum, formulation=formulation, args=self.args)

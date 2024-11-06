@@ -43,6 +43,7 @@ python src/tennis.py [options] -o <output_prefix> <gtf_file>
 ```
 
 The program outputs two files: `output_prefix.stats` and `output_prefix.pred.gtf`. 
+More about the output format is available [here](docs/output_format.md).
 
 ### Required positional arguments:
 
@@ -81,6 +82,8 @@ Default: 900 (15 minutes)
 
 `output_prefix.pred.gtf` : 
 ​	GTF format file with predicted novel isoforms.
+
+More about the output format is available [here](docs/output_format.md).
 
 # Contributing
 

@@ -23,14 +23,14 @@ The `output_prefix.pred.gtf` file has a standard pdf format with additional info
 
 | Tag | Value |
 |---|---|
-| gene_id | gene id |
+| gene_id | original gene id (same as input gtf) |
 | transcript_id | transcript id |
 | novel_transcript_num | Number of novel isoforms required by the transcript group to satisfy the evolution model. This attr reflects the T1, T2, ..., Tm information. |
 | solutions_in | This isoform is in those solutions. For example [1,2,3] means this isoform appears in solution 1, solution2, and solution 3|
 | solutions_total_num | Number of optimal solutions computed. Note this entry is different from "novel_transcript_num" |
 | solution_unique | Is the solution unique or not. Namely, `solutions_total_num == 1`? |
 | mandatory | This isoform appears in all solutions or not. Namely, `len(solutions_in) == solutions_total_num`? |
-| PctIn | Ratio of solutions that this isoform appears. Namely, `len(solutions_in) / solutions_total_num`. Apparently, PctIn = 1 iff mandatory |
+| PctIn | Ratio of solutions that this isoform appears in. Namely, `len(solutions_in) / solutions_total_num`. Apparently, PctIn = 1 iff mandatory |
 | timed_out | If True, solver did not complete within the given time limit |
 
 An example of attr col:

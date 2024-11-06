@@ -48,8 +48,7 @@ More about the output format is available [here](docs/output_format.md).
 ### Required positional arguments:
 
 `gtf_file` : str  
-Input GTF file in standard format containing gene and transcript 
-annotations.
+Input GTF file in standard format containing transcript annotations.
 
 ### Optional arguments:
 
@@ -59,7 +58,7 @@ annotations.
 Default: "tennis"
 
 `-p`, `--PctIn_threshold` : float    
-A threshold in range [0, 1]. Predicted isoforms with *PctIn* value lower than this threshold will be filtered out. If -p 0.0, all isoforms are retained.    
+A threshold in range [0, 1]. Predicted isoforms with *PctIn* value lower than this threshold will be filtered out. If `-p 0.0`, all isoforms are retained.    
 Default: 0.5
 
 `-x`, `--exclude_group_size` : int  
@@ -68,7 +67,6 @@ Default: 100
 
 `-m`, `--max_novel_isoform` : int  
 Maximum number of novel isoforms to predict per transcript group.  
-Helps control the number of predictions and maintain quality.  
 Default: 4
 
 `--time_out` : int   
@@ -87,9 +85,9 @@ More about the output format is available [here](docs/output_format.md).
 
 # Contributing
 
-For bug reports or feature requests, please open an issue on the GitHub repository.
+For bug reports or feature requests, please open an issue on the GitHub repository [here](https://github.com/Shao-Group/TENNIS/issues).
 
-# **License**
+# License
 
 TENNIS is freely available under BSD 3-Clause License. 
 

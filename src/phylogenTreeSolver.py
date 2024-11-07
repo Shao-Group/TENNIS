@@ -32,17 +32,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
+from src.util import *
+from pysat.card import EncType, CardEnc
+from pysat.solvers import Solver
+from pysat.formula import Atom, IDPool, CNF, PYSAT_TRUE, PYSAT_FALSE #, Neg
 import sys
 import time
 import random
 import itertools
 from typing import List
 from threading import Timer
-from util import *
-# dependency
-from pysat.card import EncType, CardEnc
-from pysat.solvers import Solver
-from pysat.formula import Atom, IDPool, CNF, PYSAT_TRUE, PYSAT_FALSE #, Neg
 
 class PhylogenTreeSolver():
     def __init__(self, knownTx: List[List[int]],

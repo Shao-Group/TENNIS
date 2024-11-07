@@ -34,9 +34,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
-from phylogenTreeSolver import PhylogenTreeSolver
-from GTF import parse as parse_gtf_line
-from GTF import get_xi_counts
+from src.random_iterator_product import produce_random
+from src.phylogenTreeSolver import PhylogenTreeSolver
+from src.GTF import parse as parse_gtf_line
+from src.GTF import get_xi_counts
+from src.util import *
 from typing import List
 from collections import defaultdict
 from collections import Counter
@@ -44,13 +46,11 @@ from sys import argv
 from pprint import pprint, pformat
 import pickle
 from os.path import basename, exists
-from util import *
 import sys
 import os.path
 from time import sleep 
 from datetime import datetime
 import random
-from random_iterator_product import produce_random
 import argparse
 
 class GeneChainToTree():

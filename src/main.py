@@ -667,7 +667,7 @@ def parse_arguments():
 
 
 
-if __name__ == "__main__":
+def main():
     random.seed(2024)
     d0 = datetime.today().strftime('%Y-%m-%d')
     t0 = datetime.today().strftime('%H:%M:%S')
@@ -698,3 +698,7 @@ if __name__ == "__main__":
           f"Output files:\n" +
           " " * 8 + f"{save_basename}.stats\n"+
           " " * 8 + f"{save_basename}.pred.gtf")
+
+
+if __name__ == "__main__":
+    main()

@@ -21,6 +21,7 @@ pip install python-sat[aiger,approxmc,cryptosat,pblib]
 # install TENNIS
 git clone https://github.com/Shao-Group/TENNIS
 cd TENNIS
+chmod +x src/tennis
 ```
 
 This repository also modified and re-distributes GTF.py codes (retrieved from [here](https://gist.github.com/slowkow/8101481?permalink_comment_id=321645i7)) developed by Kamil Slowikowski. Users don't have to re-download it.
@@ -29,17 +30,18 @@ This repository also modified and re-distributes GTF.py codes (retrieved from [h
 
 ```sh
 # display help message
-python src/tennis.py -h
+./src/tennis -h
 # run TENNIS on an example dataset
 mkdir test
 cd test
-python ../src/tennis.py -o tennis_example ../example/example.gtf 
+./src/tennis -o tennis_example ../example/example.gtf 
 ```
 
-# **Usage** 
-
+# Usage
+If installed with conda or pip, `tennis` executable should be ready to use in `$PATH`.
+If installed manually, the `tennis` executable is in `./src/` dir. 
 ```sh
-python src/tennis.py [options] -o <output_prefix> <gtf_file> 
+tennis [options] -o <output_prefix> <gtf_file> 
 ```
 
 The program outputs two files: `output_prefix.stats` and `output_prefix.pred.gtf`. 

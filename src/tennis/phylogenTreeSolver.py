@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
-from src.util import *
+from .util import *
 from pysat.card import EncType, CardEnc
 from pysat.solvers import Solver
 from pysat.formula import Atom, IDPool, CNF, PYSAT_TRUE, PYSAT_FALSE #, Neg

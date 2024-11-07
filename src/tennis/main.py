@@ -34,11 +34,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
-from src.random_iterator_product import produce_random
-from src.phylogenTreeSolver import PhylogenTreeSolver
-from src.GTF import parse as parse_gtf_line
-from src.GTF import get_xi_counts
-from src.util import *
+from .random_iterator_product import produce_random
+from .phylogenTreeSolver import PhylogenTreeSolver
+from .GTF import parse as parse_gtf_line
+from .GTF import get_xi_counts
+from .util import *
 from typing import List
 from collections import defaultdict
 from collections import Counter

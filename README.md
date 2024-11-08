@@ -89,8 +89,23 @@ More about the output format is available [here](docs/output_format.md).
 
 For bug reports or feature requests, please open an issue on the GitHub repository [here](https://github.com/Shao-Group/TENNIS/issues).
 
-# License
+
+
+# License & Citation
 
 TENNIS is freely available under BSD 3-Clause License. 
 
 Copyright (c) 2024, Xiaofei Carl Zang, Ke Chen, Mingfu Shao, and The Pennsylvania State University.
+
+The preprint of TENNIS is available on bioRxiv [here](https://doi.org/10.1101/2024.11.04.621892).
+
+```
+@article {TENNIS,
+	author = {Zang, Xiaofei Carl and Chen, Ke and Khan, Irtesam Mahmud and Shao, Mingfu},
+	title = {Augmenting Transcriptome Annotations through the Lens of Splicing Evolution},
+	year = {2024},
+	doi = {10.1101/2024.11.04.621892},
+	journal = {bioRxiv}
+}
+```
+

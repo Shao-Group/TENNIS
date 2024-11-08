@@ -2,9 +2,17 @@
 
 TENNIS is an evolution-based model to predict unannotated isoforms and refine existing transcriptome annotations without requiring additional data. 
 
-
-
 # Installation
+
+The easiest way to install TENNIS is using `pip`.
+
+```sh
+pip install tennis-transcriptome
+```
+
+
+
+## Manual Installation
 
 ### Prerequisites
 
@@ -13,7 +21,9 @@ TENNIS is an evolution-based model to predict unannotated isoforms and refine ex
 
 ### Installation 
 
-The only dependency of TENNIS is [PySAT](https://pysathq.github.io/), which can be installed with `pip`. TENNIS can be installed by directly cloning this repository.
+The only dependency of TENNIS is [PySAT](https://pysathq.github.io/), which can be installed with `pip`. Manual compilation of PySAT is described in their github repo [here](https://github.com/pysathq/pysat).
+
+TENNIS can be installed by directly cloning this repository.
 
 ```sh
 # install PySAT

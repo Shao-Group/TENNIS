@@ -2,7 +2,8 @@
 
 TENNIS is an evolution-based model to predict unannotated isoforms and refine existing transcriptome annotations without requiring additional data. 
 
-# Installation
+# Installation 
+[![PyPI downloads](https://img.shields.io/pepy/dt/tennis-transcriptome?style=flat&label=PyPI%20downloads&color=blue)](https://pypi.org/project/tennis-transcriptome/)
 
 The easiest way to install TENNIS is using `pip`.
 

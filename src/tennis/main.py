@@ -645,21 +645,25 @@ def parse_arguments():
     parser.add_argument("-o", "--output_prefix",      type=str, default="tennis", help="Output prefix for stats and prediction files")
     parser.add_argument("-p", "--PctIn_threshold",    type=float, default=0.5,    help="Predicted isoforms with PctIn value lower than this threshold will be filtered out.")
     parser.add_argument("-x", "--exclude_group_size", type=int, default=100,      help="Exclude large transcript group with size greater than this value")
-    parser.add_argument("-m", "--max_novel_isoform",  type=int, default=4,        help="Maximum number of allowed novel isoforms in a transcript group")
+    parser.add_argument("-m", "--max_novel_isoform",  type=int, default=-1,       help="Maximum number of allowed novel isoforms in a transcript group. Default not specified (-1) means no limit. If specified, must be greater than 0.")
+    parser.add_argument("-b", "--upper_bound",        type=bool, default=True,    help="Compute upper bound for max_novel_isoform. If upper bound is higher than max_novel_isoform, program will use at most max_novel_isoform.")
     parser.add_argument(      "--time_out",           type=int, default=900,      help="Each SAT instance time out in seconds")
     if is_test:
-        parser.add_argument("-f", "--formulation", type=str, default="SATSimple", choices=["SATSimple", "Random1", "RandomX"], help="Formulation type")
+        parser.add_argument("-f", "--formulation", type=str, default="HeuristicAndSAT", choices=["HeuristicAndSAT", "SATSimple", "Random1", "RandomX"], help="Formulation type")
         parser.add_argument("--xi_gtf_file", type=str, default=None, help="gtf file from TENNIS with Ti information")
     else:
-        parser.formulation = "SATSimple"
+        parser.formulation = "HeuristicAndSAT"
 
     parser.add_argument("gtf_file", type=str, help="Input GTF file")
     args = parser.parse_args(args)
     if not is_test:
-        args.formulation = "SATSimple"
+        args.formulation = "HeuristicAndSAT"
     
     if args.PctIn_threshold > 1 or args.PctIn_threshold < 0:
         raise ValueError("--PctIn_threshold must be between 0 and 1")
+    if not args.upper_bound and args.max_novel_isoform <= 0:
+        print(f"Error: --upper_bound is set to False. --max_novel_isoform must be specified (given {args.max_novel_isoform})", file=sys.stderr)
+        exit(1)
     if args.max_novel_isoform > 10:
         print(f"Warning: --max_novel_isoform set to {args.max_novel_isoform}. Default is 4. Allowing too many isoforms will slow down the program.", file=sys.stderr)
         sleep(10)
@@ -671,8 +675,13 @@ def main():
     random.seed(2024)
     d0 = datetime.today().strftime('%Y-%m-%d')
     t0 = datetime.today().strftime('%H:%M:%S')
-    
+
     args = parse_arguments()
+
+    # Print command line and arguments
+    print("All arguments:", args)
+    print("Command line:", ' '.join(sys.argv))
+    print()
 
     gtf_file         = args.gtf_file
     formulation      = args.formulation

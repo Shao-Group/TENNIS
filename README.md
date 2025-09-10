@@ -11,13 +11,12 @@ The easiest way to install TENNIS is using `pip`.
 pip install tennis-transcriptome
 ```
 
-
-
-## Manual Installation
+## Installation from source
 
 ### Prerequisites
 
-- Python >= 3.7
+- Python3
+- pip 
 - [PySAT](https://pysathq.github.io/)
 
 ### Installation 
@@ -32,25 +31,26 @@ pip install python-sat[aiger,approxmc,cryptosat,pblib]
 # install TENNIS
 git clone https://github.com/Shao-Group/TENNIS
 cd TENNIS
-chmod +x src/tennis
+pip install .
 ```
 
 This repository also modified and re-distributes GTF.py codes (retrieved from [here](https://gist.github.com/slowkow/8101481?permalink_comment_id=321645i7)) developed by Kamil Slowikowski. Users don't have to re-download it.
 
-### Test and Example
+## Test and Example
+
+After installation, TENNIS can be invoked by `tennis` from command line.
 
 ```sh
 # display help message
-./src/tennis -h
+tennis -h
+
 # run TENNIS on an example dataset
 mkdir test
 cd test
-./src/tennis -o tennis_example ../example/example.gtf 
+tennis -o tennis_example ../example/example.gtf 
 ```
 
 # Usage
-If installed with conda or pip, `tennis` executable should be ready to use in `$PATH`.
-If installed manually, the `tennis` executable is in `./src/` dir. 
 ```sh
 tennis [options] -o <output_prefix> <gtf_file> 
 ```

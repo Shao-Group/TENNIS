@@ -1,0 +1,38 @@
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tennis"]
+
+
+[project]
+name        = "tennis-transcriptome"
+version     = "0.0.1"
+license     = "BSD-3-Clause"
+description = "TENNIS is an evolution-based model to predict unannotated isoforms and refine existing transcriptome annotations"
+authors     = [
+  { name="Xiaofei Carl Zang", email="xbz5174@psu.edu" },
+  { name="Ke Chen", email="kxc5915@psu.edu" },
+  { name="Mingfu Shao", email="mxs2589@psu.edu" },
+]
+dependencies    = [
+  "python-sat[aiger,approxmc,cryptosat,pblib]>=0.1.8.dev3"
+]
+readme          = "README.md"
+requires-python = ">=3.7"
+classifiers     = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: BSD License",
+]
+
+include = [
+    "src/tennis/*.py", 
+]
+
+[project.scripts]
+"tennis" = "tennis.main:main"
+
+[project.urls]
+"Homepage" = "https://github.com/Shao-Group/TENNIS/"
+"Bug Tracker" = "https://github.com/Shao-Group/TENNIS/issues"

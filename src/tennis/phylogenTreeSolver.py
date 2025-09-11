@@ -33,6 +33,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 from .util import *
+from .bound import boundComputer
 from pysat.card import EncType, CardEnc
 from pysat.solvers import Solver
 from pysat.formula import Atom, IDPool, CNF, PYSAT_TRUE, PYSAT_FALSE #, Neg
@@ -155,13 +156,41 @@ class PhylogenTreeSolver():
         return 0
 
     def __get_maxAddlNodes(self) -> int:
-        b = [sum(i) for i in self.knownTx]
-        x = self.numExons * self.numKnownTx - sum(b)
-        self.maxAddlNodes = min(x, self.maxAddlNodes)
+        # Use boundComputer to get a much better upper bound
+        bound_computer = boundComputer(self.knownTx)
+        
+        # Early return if only 1 connected component (no additional nodes needed)
+        if bound_computer.get_connected_components_count() <= 1:
+            print("Only 1 connected component found. No additional nodes needed.")
+            self.maxAddlNodes = 0
+            self.minAddlNodes = 0
+            # Set as feasible since no additional nodes needed
+            return 0
+        
+        # Get sophisticated upper bound from boundComputer
+        computed_upper_bound = bound_computer.get_upper_bound()
+        
+        # Use the minimum of the computed bound and the user-specified max
+        if self.maxAddlNodes <= 0:
+            self.maxAddlNodes = computed_upper_bound
+        else:
+            self.maxAddlNodes = min(computed_upper_bound, self.maxAddlNodes)
+        
+        print(f"boundComputer analysis:")
+        print(f"  Connected components: {bound_computer.get_connected_components_count()}")
+        print(f"  MST-based upper bound: {bound_computer.get_upper_bound_mst()}")
+        print(f"  Hub-based upper bound: {bound_computer.get_upper_bound_hub()}")
+        print(f"  Computed upper bound: {computed_upper_bound}")
+        print(f"  Using maxAddlNodes: {self.maxAddlNodes}")
+        
         return self.maxAddlNodes
 
     # return `minNum`` needed missing internal nodes to construct a tree
-    def __satPhyloTree(self) -> int:      
+    def __satPhyloTree(self) -> int:
+        # If maxAddlNodes is 0 and minAddlNodes is already set to 0, we're done
+        if self.maxAddlNodes == 0 and self.minAddlNodes == 0:
+            return 0
+            
         for i in range(self.maxAddlNodes + 1):
             # print("Current add'l nodes: ", i)
             if self.formulation == 'SATSimple':

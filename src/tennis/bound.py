@@ -116,12 +116,13 @@ class boundComputer:
         """Build hypergraph where nodes are connected components and edges have min distance between CCs."""
         if self.connected_components is None or self.hamming_distances is None:
             raise ValueError("Connected components and hamming distances must be computed first")
-        n_components = len(self.connected_components)
+
+        n_components = self.get_connected_components_count()
         self.hypergraph = nx.Graph()
         
         # Add nodes (each connected component becomes a node)
         for i, component in enumerate(self.connected_components):
-            self.hypergraph.add_node(i, component=component, size=len(component))
+            self.hypergraph.add_node(i, component=component)
         
         # Add edges between all pairs of components with minimum hamming distance as weight
         for i in range(n_components):
@@ -134,15 +135,9 @@ class boundComputer:
     
     def _min_distance_between_components(self, component1: List[int], component2: List[int]) -> int:
         """Find minimum hamming distance between any two vectors from different components."""
-        min_dist = float('inf')
-        
-        for node1 in component1:
-            for node2 in component2:
-                # Use stored hamming distances (symmetric matrix)
-                dist = self.hamming_distances[node1, node2]
-                min_dist = min(min_dist, dist)
-        
-        return int(min_dist)
+        # Use advanced indexing to get all distances between components at once
+        distances = self.hamming_distances[np.ix_(component1, component2)]
+        return int(np.min(distances))
     
     def _compute_upper_bound_mst(self) -> None:
         """Compute upper bound based on hypergraph MST structure."""
@@ -157,7 +152,7 @@ class boundComputer:
         # Find minimum spanning tree of hypergraph to get minimal connection cost
         mst = nx.minimum_spanning_tree(self.hypergraph, weight='weight')
         
-        # MST size: exactly (num_connected_components - 1) edges
+        # MST size (num_connected_components - 1) edges
         mst_size = len(mst.edges())
         assert mst_size == self.num_connected_components - 1, f"MST should have {self.num_connected_components - 1} edges, got {mst_size}"
         
@@ -182,13 +177,11 @@ class boundComputer:
         
         # For each connected component, find the minimum flips needed to reach hub_vector
         for component in self.connected_components:
-            min_flips_in_component = float('inf')
-            
-            for node_idx in component:
-                # Calculate hamming distance from this vector to hub_vector
-                flips_needed = np.sum(self.matrix[node_idx] != hub_vector)
-                min_flips_in_component = min(min_flips_in_component, flips_needed)
-            
+            # Vectorized calculation: get all vectors in component and compute distances at once
+            component_vectors = self.matrix[component]
+            flips_needed = np.sum(component_vectors != hub_vector, axis=1)
+            min_flips_in_component = np.min(flips_needed)
+
             total_flips += min_flips_in_component
         
         self.upper_bound_hub = total_flips
@@ -197,8 +190,6 @@ class boundComputer:
         """Compute final upper bound as minimum of MST and hub approaches."""
         if self.upper_bound_mst is None or self.upper_bound_hub is None:
             raise ValueError("Both MST and hub upper bounds must be computed first")
-        
-        # Take the minimum of both approaches
         self.upper_bound = min(self.upper_bound_mst, self.upper_bound_hub)
     
     def get_upper_bound(self) -> int:

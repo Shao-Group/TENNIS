@@ -49,13 +49,14 @@ import random
 import itertools
 from typing import List
 from threading import Timer
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-class PhylogenTreeSolver():
+class PhylogenTreeSolver():            
     def __init__(self, knownTx: List[List[int]],
                  maxAddlNodes:int = 4,
                  maxEdged: int = 1,
                  solver: str = '',
-                 formulation: str = 'SATSimple',
+                 formulation: str = 'HeuristicAndSAT',
                  time_limit = 900,
                  printAllVar: bool = False) -> None:
 
@@ -72,9 +73,11 @@ class PhylogenTreeSolver():
         self.printAllVar = printAllVar
         self.timed_out = False
         self.time_limit = time_limit
+        self.bound_computer = None
         if solver == '':
             self.solver = 'Glucose4' if (formulation == 'SAT' or
-                                         formulation == 'SATSimple') else 'ERROR'
+                                         formulation == 'SATSimple' or 
+                                         formulation == 'HeuristicAndSAT') else 'ERROR'
         self.__sanity_check()
         self.__get_maxAddlNodes()
         self.__satPhyloTree()
@@ -158,15 +161,15 @@ class PhylogenTreeSolver():
                 assert isinstance(x, int)
                 assert is_binary(x)
         # check formulation
-        assert self.formulation in ['SAT', 'SATSimple']
+        assert self.formulation in ['SAT', 'SATSimple', 'HeuristicAndSAT']
         return 0
 
     def __get_maxAddlNodes(self) -> int:
         # Use boundComputer to get a much better upper bound
-        bound_computer = boundComputer(self.knownTx)
+        self.bound_computer = boundComputer(self.knownTx)
         
         # Early return if only 1 connected component (no additional nodes needed)
-        if bound_computer.get_connected_components_count() <= 1:
+        if self.bound_computer.get_connected_components_count() <= 1:
             print("Only 1 connected component found. No additional nodes needed.")
             self.maxAddlNodes = 0
             self.minAddlNodes = 0
@@ -174,7 +177,7 @@ class PhylogenTreeSolver():
             return 0
         
         # Get sophisticated upper bound from boundComputer
-        computed_upper_bound = bound_computer.get_upper_bound()
+        computed_upper_bound = self.bound_computer.get_upper_bound()
         
         # Use the minimum of the computed bound and the user-specified max
         if self.maxAddlNodes <= 0:
@@ -183,14 +186,23 @@ class PhylogenTreeSolver():
             self.maxAddlNodes = min(computed_upper_bound, self.maxAddlNodes)
         
         print(f"boundComputer analysis:")
-        print(f"  Connected components: {bound_computer.get_connected_components_count()}")
-        print(f"  MST-based upper bound: {bound_computer.get_upper_bound_mst()}")
-        print(f"  Hub-based upper bound: {bound_computer.get_upper_bound_hub()}")
+        print(f"  Connected components: {self.bound_computer.get_connected_components_count()}")
+        print(f"  MST-based upper bound: {self.bound_computer.get_upper_bound_mst()}")
+        print(f"  Hub-based upper bound: {self.bound_computer.get_upper_bound_hub()}")
         print(f"  Computed upper bound: {computed_upper_bound}")
         print(f"  Using maxAddlNodes: {self.maxAddlNodes}")
         
         return self.maxAddlNodes
 
+    def create_heuristic_solver_with_timeout(self, knownTx, bound_computer, timeout_seconds=900) -> HeuristicSolver | None:
+        """Create HeuristicSolver with timeout. Returns solver instance or None if timeout."""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(HeuristicSolver, knownTx, bound_computer)
+            try:
+                return future.result(timeout=timeout_seconds)
+            except FutureTimeoutError:
+                return None
+        
     # return `minNum`` needed missing internal nodes to construct a tree
     def __satPhyloTree(self) -> int:
         # If maxAddlNodes is 0 and minAddlNodes is already set to 0, we're done
@@ -199,7 +211,25 @@ class PhylogenTreeSolver():
             
         for i in range(self.maxAddlNodes + 1):
             # print("Current add'l nodes: ", i)
-            if self.formulation == 'SATSimple':
+            if self.formulation == 'HeuristicAndSAT' and i == 0:
+                # try heuristic first when i == 0
+                heuristic_solver = self.create_heuristic_solver_with_timeout(self.knownTx, self.bound_computer, timeout_seconds=self.time_limit)
+                if heuristic_solver is None:
+                    print("HeuristicSolver timed out after 10 minutes, continuing with SAT solver")
+                elif heuristic_solver is not None and heuristic_solver.is_feasible:
+                    if heuristic_solver.min_additional_nodes > self.maxAddlNodes:
+                        return -1  # cannot finish within maxAddlNodes
+                    self.minAddlNodes = heuristic_solver.min_additional_nodes
+                    assert self.minAddlNodes >= 0
+                    self.__remove_dup_novel_solution_and_get_mult_sol_info(heuristic_solver.all_solutions)
+                    print(f"Heuristic found solution with {heuristic_solver.min_additional_nodes} add'l nodes")
+                    return heuristic_solver.min_additional_nodes
+                else:
+                    # heuristic_solver did not solve
+                    pass
+                
+            # For all other cases, use SATSimple solver
+            if self.formulation == 'HeuristicAndSAT' or self.formulation == 'SATSimple':
                 is_solved = self.__ilpPhyloTreeSatSimple(i)
                 if self.timed_out and not is_solved: 
                     break    # time out and not solved

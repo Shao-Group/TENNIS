@@ -229,12 +229,12 @@ class Transcriptom():
             os.remove(self.gtfpredfile)
         self.args = args
         self.ignore_single_exon_isoform = ignore_single_exon_isoform
-        self.maxAddlNodes           = args.max_novel_isoform if args!= None else 4
+        self.maxAddlNodes           = args.max_novel_isoform if args!= None else 4 #FIXME: get maximum
         self.countSingleIsoformGene = 0
         self.geneCount              = 0
         self.bigGene                = 0
         self.infeasiCount           = 0
-        self.geneAddlnodeCounts     = [0] * (self.maxAddlNodes + 1)
+        self.geneAddlnodeCounts     = defaultdict(int)  #d[Ti] = # genes in Ti
         self.genes                  = list()
         self.matrix_gids            = list()
         self.IsoCountAddlnodeCounts = defaultdict(int)  #d[isoCount, AddlNum] = # occur

@@ -69,6 +69,7 @@ class HeuristicSolver:
             self.solution_info = []
         elif self.num_components == 2:
             # Use 2-CC heuristic
+            print("Using 2-CC heuristic solver")
             self._solve_two_components()
         else:
             # For now, only handle 2 CCs

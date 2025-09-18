@@ -169,7 +169,11 @@ class boundComputer:
         if self.num_connected_components <= 1:
             self.upper_bound_hub = 0
             return
-        
+
+        if self.upper_bound_mst == 1:
+            self.upper_bound_hub = 1
+            return
+
         # Compute bitwise OR of all vectors (positions with at least one 1)
         hub_vector = np.any(self.matrix, axis=0).astype(int)
         

@@ -210,44 +210,13 @@ class PhylogenTreeSolver():
             print(f"timed out when trying {i} nodes")
         return -1
 
+    
     # where a phylo tree can be constructed with distance-maxEdgeDist edges
     # using addlN missing internal nodes
     # this version does not consider alternative TSS/TES, namely, all bits participate in the distance calculation
     def __ilpPhyloTreeSatSimple(self, addlN) -> bool:
         startTime = time.time()
         # use when the atoms in the list v maybe constant
-        def nameOfAtom(x:Atom) -> int:
-            if x == PYSAT_TRUE:
-                return 1
-            elif x == PYSAT_FALSE:
-                return 0
-            else:
-                return x.name
-            
-        def Neg(x:Atom) -> int:
-            if x == PYSAT_TRUE:
-                return 0
-            elif x == PYSAT_FALSE:
-                return 1
-            else:
-                return -x.name
-
-        # this version assumes the Atoms/Negs are already processed into ints (by the above two functions),
-        # 0/1 are reserved for PYSAT_FALSE/TRUE respectively   
-        def listOr(v:list) -> list:
-            result = [0]*len(v)
-            resultLen = 0
-            for x in v:
-                assert(x != -1)
-                if x == 1:
-                    return [] # [] is treated as false in the solver but we will remove them from the final cnf
-                elif x == 0:
-                    continue
-                else:
-                    result[resultLen] = x
-                    resultLen += 1
-            return result[:resultLen]
-
         
         N = self.numKnownTx + addlN    # total num nodes
         assert(N >= 1 and self.numExons >= 1)
@@ -458,6 +427,37 @@ class PhylogenTreeSolver():
         self.__remove_dup_novel_solution_and_get_mult_sol_info(multNovelTx)
         return sol_counter > 0
 
+def nameOfAtom(x:Atom) -> int:
+        if x == PYSAT_TRUE:
+            return 1
+        elif x == PYSAT_FALSE:
+            return 0
+        else:
+            return x.name
+        
+def Neg(x:Atom) -> int:
+    if x == PYSAT_TRUE:
+        return 0
+    elif x == PYSAT_FALSE:
+        return 1
+    else:
+        return -x.name
+
+# this version assumes the Atoms/Negs are already processed into ints (by the above two functions),
+# 0/1 are reserved for PYSAT_FALSE/TRUE respectively   
+def listOr(v:list) -> list:
+    result = [0]*len(v)
+    resultLen = 0
+    for x in v:
+        assert(x != -1)
+        if x == 1:
+            return [] # [] is treated as false in the solver but we will remove them from the final cnf
+        elif x == 0:
+            continue
+        else:
+            result[resultLen] = x
+            resultLen += 1
+    return result[:resultLen]
 
 
 def test(cols = 20, rows = 10):

@@ -46,9 +46,9 @@ except ImportError:
 
 
 class HeuristicSolver:
-    def __init__(self, matrix: List[List[int]]):
+    def __init__(self, matrix: List[List[int]], bc: boundComputer = None) -> None:
         self.matrix = np.array(matrix)
-        self.bound_computer = boundComputer(self.matrix)
+        self.bound_computer = bc if bc is not None else boundComputer(self.matrix)
         self.connected_components = self.bound_computer.get_connected_components()
         self.num_components = len(self.connected_components)
         
@@ -83,14 +83,17 @@ class HeuristicSolver:
         min_distance = float('inf')
         best_pairs = []
         
-        for node1 in cc1:
-            for node2 in cc2:
-                distance = np.sum(self.matrix[node1] != self.matrix[node2])
-                if distance < min_distance:
-                    min_distance = distance
-                    best_pairs = [(node1, node2)]
-                elif distance == min_distance:
-                    best_pairs.append((node1, node2))
+        # Vectorized computation of all pairwise distances
+        matrix_cc1 = self.matrix[cc1]  # Shape: (len(cc1), num_features)
+        matrix_cc2 = self.matrix[cc2]  # Shape: (len(cc2), num_features)
+
+        # Broadcast and compute all pairwise distances at once
+        distances = np.sum(matrix_cc1[:, np.newaxis] != matrix_cc2[np.newaxis, :], axis=2)
+
+        # Find minimum distance and all pairs with that distance
+        min_distance = np.min(distances)
+        min_indices = np.where(distances == min_distance)
+        best_pairs = [(cc1[i], cc2[j]) for i, j in zip(min_indices[0], min_indices[1])]
         
         # Number of additional nodes needed = min_distance - 1
         self.min_additional_nodes = max(0, min_distance - 1)
@@ -182,6 +185,7 @@ class HeuristicSolver:
 def test_heuristic_solver():
     """Test function for the heuristic solver."""
     # Test case 1: Two components with distance 3
+    print("Test Matrix:")
     test_matrix = [
         [1, 0, 0, 0],  # CC1
         [1, 1, 0, 0],  # CC1 (connected to first by 1 bit)

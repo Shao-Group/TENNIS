@@ -561,4 +561,5 @@ def test_array(formulation: str = 'ILPOriginal'):
 
 
 if __name__ == "__main__":
-    raise RuntimeError("This module is not meant to be run as a script")
+    test_array('HeuristicAndSAT')
+    test(20, 10)

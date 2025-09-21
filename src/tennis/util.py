@@ -32,7 +32,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
 
+import time
+import functools
 from pysat.formula import Atom, PYSAT_TRUE
+
+# Global variable to control timer behavior
+IS_TEST = False
+
+def timer(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if not IS_TEST:
+            return func(*args, **kwargs)
+
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+
+        # Check if this is HeuristicSolver class method
+        if args and hasattr(args[0], '__class__') and args[0].__class__.__name__ == 'HeuristicSolver':
+            print(f"{func.__name__} took {end_time - start_time:.4f} seconds")
+        else:
+            # For class methods, exclude 'self' parameter
+            display_args = args[1:] if args and hasattr(args[0], '__class__') else args
+            print(f"{func.__name__}({display_args}, {kwargs}) took {end_time - start_time:.4f} seconds")
+        return result
+    return wrapper
 
 # input: exon list of tuple
 # must be inclusive, non-overlapping, and sorted

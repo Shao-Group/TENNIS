@@ -204,6 +204,7 @@ class PhylogenTreeSolver():
                 return None
         
     # return `minNum`` needed missing internal nodes to construct a tree
+    @timer
     def __satPhyloTree(self) -> int:
         # If maxAddlNodes is 0 and minAddlNodes is already set to 0, we're done
         if self.maxAddlNodes == 0 and self.minAddlNodes == 0:
@@ -250,6 +251,7 @@ class PhylogenTreeSolver():
     # where a phylo tree can be constructed with distance-maxEdgeDist edges
     # using addlN missing internal nodes
     # this version does not consider alternative TSS/TES, namely, all bits participate in the distance calculation
+    @timer
     def __ilpPhyloTreeSatSimple(self, addlN) -> bool:
         startTime = time.time()
         # use when the atoms in the list v maybe constant

@@ -39,6 +39,7 @@ from .phylogenTreeSolver import PhylogenTreeSolver
 from .GTF import parse as parse_gtf_line
 from .GTF import get_xi_counts
 from .util import *
+from .util import IS_TEST as util_IS_TEST
 from typing import List
 from collections import defaultdict
 from collections import Counter
@@ -638,6 +639,7 @@ class Transcriptom():
 def parse_arguments():    
     # if argv[2] is "test", parse only argv[2:] and set test options
     is_test = True if (len(sys.argv) > 1 and sys.argv[1] == "test") else False
+    util_IS_TEST = is_test
     args    = sys.argv[1:] if not is_test else sys.argv[2:]
 
     parser = argparse.ArgumentParser(description="TENNIS -- Transcript EvolutioN for New Isoform Splicing")

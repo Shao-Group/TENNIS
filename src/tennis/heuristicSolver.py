@@ -46,6 +46,7 @@ except ImportError:
 
 
 class HeuristicSolver:
+    @timer
     def __init__(self, matrix: List[List[int]], bc: boundComputer = None) -> None:
         self.matrix = np.array(matrix)
         self.bound_computer = bc if bc is not None else boundComputer(self.matrix)

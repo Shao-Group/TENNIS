@@ -8,7 +8,7 @@ packages = ["src/tennis"]
 
 [project]
 name        = "tennis-transcriptome"
-version     = "0.0.1"
+version     = "0.0.2"
 license     = "BSD-3-Clause"
 description = "TENNIS is an evolution-based model to predict unannotated isoforms and refine existing transcriptome annotations"
 authors     = [

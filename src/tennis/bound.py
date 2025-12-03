@@ -38,7 +38,7 @@ from typing import List, Union
 
 
 class boundComputer:
-    def __init__(self, matrix: Union[List[List[int]], np.ndarray] = None):
+    def __init__(self, matrix: Union[List[List[int]], np.ndarray] = None, method: str = 'both'):
         self.matrix = matrix
         self.graph = None
         self.num_connected_components = 0
@@ -48,6 +48,7 @@ class boundComputer:
         self.upper_bound_mst = None  # Upper bound using MST approach
         self.upper_bound_hub = None  # Upper bound using hub (OR) approach
         self.upper_bound = None  # Final upper bound (minimum of both)
+        self.method = method  # Method for computing upper bound: 'mst', 'hub', or 'both'
 
         self.sanity_check()
         if matrix is not None:
@@ -55,8 +56,10 @@ class boundComputer:
             self._build_graph()
             self._count_connected_components()
             self._build_hypergraph()
-            self._compute_upper_bound_mst()
-            self._compute_upper_bound_hub()
+            if self.method in ['mst', 'both']:
+                self._compute_upper_bound_mst()
+            if self.method in ['hub', 'both']:
+                self._compute_upper_bound_hub()
             self._compute_final_upper_bound()
 
     def sanity_check(self):
@@ -191,10 +194,22 @@ class boundComputer:
         self.upper_bound_hub = total_flips
     
     def _compute_final_upper_bound(self) -> None:
-        """Compute final upper bound as minimum of MST and hub approaches."""
-        if self.upper_bound_mst is None or self.upper_bound_hub is None:
-            raise ValueError("Both MST and hub upper bounds must be computed first")
-        self.upper_bound = min(self.upper_bound_mst, self.upper_bound_hub)
+        """Compute final upper bound based on the selected method."""
+
+        if self.method == 'mst':
+            if self.upper_bound_mst is None:
+                raise ValueError("MST upper bound must be computed first")
+            self.upper_bound = self.upper_bound_mst
+        elif self.method == 'hub':
+            if self.upper_bound_hub is None:
+                raise ValueError("Hub upper bound must be computed first")
+            self.upper_bound = self.upper_bound_hub
+        elif self.method == 'both':
+            if self.upper_bound_mst is None or self.upper_bound_hub is None:
+                raise ValueError("Both MST and hub upper bounds must be computed first")
+            self.upper_bound = min(self.upper_bound_mst, self.upper_bound_hub)
+        else:
+            raise ValueError(f"Unknown method: {self.method}. Must be 'mst', 'hub', or 'both'")
     
     def get_upper_bound(self) -> int:
         """Return the computed upper bound (minimum of MST and hub approaches)."""
@@ -235,9 +250,11 @@ class boundComputer:
             "upper_bound_contribution": sum(max(0, weight - 1) for _, _, weight in mst_edges)
         }
     
-    def set_matrix(self, matrix: Union[List[List[int]], np.ndarray]) -> None:
+    def set_matrix(self, matrix: Union[List[List[int]], np.ndarray], method: str = None) -> None:
         """Set a new matrix and rebuild the graph."""
         self.matrix = matrix
+        if method is not None:
+            self.method = method
         self.sanity_check()
         self._build_graph()
         self._count_connected_components()

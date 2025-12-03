@@ -51,22 +51,23 @@ from typing import List
 from threading import Timer
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-class PhylogenTreeSolver():            
+class PhylogenTreeSolver():
     def __init__(self, knownTx: List[List[int]],
                  maxAddlNodes:int = 4,
                  maxEdged: int = 1,
                  solver: str = '',
                  formulation: str = 'HeuristicAndSAT',
                  time_limit = 900,
-                 printAllVar: bool = False) -> None:
+                 printAllVar: bool = False,
+                 upper_bound_method: str = 'mst') -> None:
 
         self.knownTx = knownTx              # a 2D binary matrix for known transcripts
-        self.maxEdgeDist = maxEdged 
+        self.maxEdgeDist = maxEdged
         self.numKnownTx = len(knownTx)
         self.numExons = len(knownTx[0])
         self.minAddlNodes = -1
         self.maxAddlNodes = maxAddlNodes
-        self.solver = solver 
+        self.solver = solver
         self.novelTx = []
         self.novelTxInfo = []
         self.formulation = formulation
@@ -74,6 +75,7 @@ class PhylogenTreeSolver():
         self.timed_out = False
         self.time_limit = time_limit
         self.bound_computer = None
+        self.upper_bound_method = upper_bound_method
         if solver == '':
             self.solver = 'Glucose4' if (formulation == 'SAT' or
                                          formulation == 'SATSimple' or 
@@ -166,7 +168,7 @@ class PhylogenTreeSolver():
 
     def __get_maxAddlNodes(self) -> int:
         # Use boundComputer to get a much better upper bound
-        self.bound_computer = boundComputer(self.knownTx)
+        self.bound_computer = boundComputer(self.knownTx, method=self.upper_bound_method)
         
         # Early return if only 1 connected component (no additional nodes needed)
         if self.bound_computer.get_connected_components_count() <= 1:
@@ -187,8 +189,11 @@ class PhylogenTreeSolver():
         
         print(f"boundComputer analysis:")
         print(f"  Connected components: {self.bound_computer.get_connected_components_count()}")
-        print(f"  MST-based upper bound: {self.bound_computer.get_upper_bound_mst()}")
-        print(f"  Hub-based upper bound: {self.bound_computer.get_upper_bound_hub()}")
+        if self.upper_bound_method in ['mst', 'both']:
+            print(f"  MST-based upper bound: {self.bound_computer.get_upper_bound_mst()}")
+        if self.upper_bound_method in ['hub', 'both']:
+            print(f"  Hub-based upper bound: {self.bound_computer.get_upper_bound_hub()}")
+        print(f"  Upper bound method: {self.upper_bound_method}")
         print(f"  Computed upper bound: {computed_upper_bound}")
         print(f"  Using maxAddlNodes: {self.maxAddlNodes}")
         

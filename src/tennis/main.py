@@ -136,8 +136,9 @@ class GeneChainToTree():
     
     def __contruct_tree(self):
         bmatrix = self.__binaries
-        treeSolver = PhylogenTreeSolver(bmatrix, self.__maxAddlNodes, formulation=self.formulation, time_limit=self.args.time_out)
-        self.__is_feasible  = treeSolver.is_feasible() 
+        treeSolver = PhylogenTreeSolver(bmatrix, self.__maxAddlNodes, formulation=self.formulation,
+                                       time_limit=self.args.time_out, upper_bound_method=self.args.upper_bound_method)
+        self.__is_feasible  = treeSolver.is_feasible()
         self.__minAddlNodes = treeSolver.get_minAddlNodes()
         self.__timed_out = treeSolver.is_timed_out()
         self.__novel_binaries, self.__novel_info = treeSolver.get_novelTx_and_info()
@@ -649,6 +650,7 @@ def parse_arguments():
     parser.add_argument("-x", "--exclude_group_size", type=int, default=100,      help="Exclude large transcript group with size greater than this value")
     parser.add_argument("-m", "--max_novel_isoform",  type=int, default=-1,       help="Maximum number of allowed novel isoforms in a transcript group. Default not specified (-1) means no limit. If specified, must be greater than 0.")
     parser.add_argument("-b", "--upper_bound",        type=bool, default=True,    help="Compute upper bound for max_novel_isoform. If upper bound is higher than max_novel_isoform, program will use at most max_novel_isoform.")
+    parser.add_argument(      "--upper_bound_method", type=str, default="mst",    choices=["mst", "hub", "both"], help="Method for computing upper bound: 'mst' (MST-based, default), 'hub' (hub-based), or 'both' (minimum of both methods)")
     parser.add_argument(      "--time_out",           type=int, default=900,      help="Each SAT instance time out in seconds")
     if is_test:
         parser.add_argument("-f", "--formulation", type=str, default="HeuristicAndSAT", choices=["HeuristicAndSAT", "SATSimple", "Random1", "RandomX"], help="Formulation type")

@@ -85,9 +85,12 @@ class GeneChainToTree():
 
     def is_feasible(self):
         return self.__is_feasible
-    
+
     def get_minAddlNodes(self):
         return self.__minAddlNodes
+
+    def is_timed_out(self):
+        return self.__timed_out
 
     # use novel binary matrix to return novel feature chains
     def get_novel_transcripts(self):
@@ -256,12 +259,12 @@ class Transcriptom():
     def _initialize_csv(self):
         with open(self.statscsv, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(['gene_id', 'TSS', 'TES', 'num_isoforms', 'upper_bound', 'real_additional_nodes', 'num_solutions'])
+            writer.writerow(['gene_id', 'TSS', 'TES', 'num_isoforms', 'upper_bound', 'real_additional_nodes', 'num_solutions', 'time_out'])
 
-    def _write_group_stats_to_csv(self, gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions):
+    def _write_group_stats_to_csv(self, gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions, time_out):
         with open(self.statscsv, 'a', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow([gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions])
+            writer.writerow([gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions, time_out])
 
     def get_trees(self, chain_type: str = 'pexon_chain', transcript_group: str = 'tsstes_level', 
                   to_save: bool = True, statsfile='', gtfpredfile='',
@@ -309,8 +312,11 @@ class Transcriptom():
             tx_info = x.get_tx_info()
             num_solutions = tx_info[0]['solutions_total_num'] if len(tx_info) > 0 and 'solutions_total_num' in tx_info[0] else 0
 
+            # Get timeout status
+            timed_out = x.is_timed_out()
+
             # Write stats to CSV
-            self._write_group_stats_to_csv(gid, tss, tes, isoN, upper_bound_used, addlN, num_solutions)
+            self._write_group_stats_to_csv(gid, tss, tes, isoN, upper_bound_used, addlN, num_solutions, timed_out)
 
             if x.is_feasible():
                 self.geneAddlnodeCounts[addlN] += 1

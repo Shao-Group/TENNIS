@@ -78,12 +78,16 @@ Default: 0.5
 Skip analysis of transcript groups that have more isoforms than this threshold.  
 Default: 100
 
-`-m`, `--max_novel_isoform` : int  
-Maximum number of novel isoforms to predict per transcript group.  
+`-m`, `--max_novel_isoform` : int
+Maximum number of novel isoforms to predict per transcript group.
 Default: 4
 
-`--time_out` : int   
-Time limit in seconds for each SAT solver instance.  
+`--upper_bound_method` : str
+Method for computing upper bound on the number of novel isoforms. Options: `mst` (MST-based), `hub` (hub-based), or `both` (minimum of both methods).
+Default: "mst"
+
+`--time_out` : int
+Time limit in seconds for each SAT solver instance.
 Default: 900 (15 minutes)
 
 ## Output Files

@@ -49,10 +49,11 @@ import pickle
 from os.path import basename, exists
 import sys
 import os.path
-from time import sleep 
+from time import sleep
 from datetime import datetime
 import random
 import argparse
+import csv
 
 class GeneChainToTree():
     # given chains of a gene (2D matrix)
@@ -690,8 +691,8 @@ def main():
     gtf_file         = args.gtf_file
     formulation      = args.formulation
     chain_type       = 'pexon_chain'
-    transcript_group = 'tsstes_level' 
-    save_basename = args.output_prefix 
+    transcript_group = 'tsstes_level'
+    save_basename = args.output_prefix
 
     tsm = Transcriptom(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', args=args)
 

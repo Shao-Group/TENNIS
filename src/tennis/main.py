@@ -220,16 +220,20 @@ class GeneChainToTree():
 
 
 class Transcriptom():
-    def __init__(self, gtf: str, statsfile='', gtfpredfile='', ignore_single_exon_isoform: bool = True, args = None):
+    def __init__(self, gtf: str, statsfile='', gtfpredfile='', statscsv='', ignore_single_exon_isoform: bool = True, args = None):
         self.gtf_input  = gtf
         self.statsfile   = statsfile   if statsfile   != '' else basename(gtf) + '.stats'
         self.gtfpredfile = gtfpredfile if gtfpredfile != '' else basename(gtf) + '.pred.gtf'
+        self.statscsv    = statscsv    if statscsv    != '' else 'stats.csv'
         if os.path.exists(self.statsfile):
             print(f"File {self.statsfile} exists. Now removing it.", file=sys.stderr)
             os.remove(self.statsfile)
         if os.path.exists(self.gtfpredfile):
             print(f"File {self.gtfpredfile} exists. Now removing it.", file=sys.stderr)
             os.remove(self.gtfpredfile)
+        if os.path.exists(self.statscsv):
+            print(f"File {self.statscsv} exists. Now removing it.", file=sys.stderr)
+            os.remove(self.statscsv)
         self.args = args
         self.ignore_single_exon_isoform = ignore_single_exon_isoform
         self.maxAddlNodes           = args.max_novel_isoform if args!= None else 4 #FIXME: get maximum
@@ -246,8 +250,19 @@ class Transcriptom():
         self.genesDict              = defaultdict(list)
         self.exonMatrixCollection   = list()
         self.gene2basicinfo         = dict()            #genes2basicinfo[gid] = [fields[x] for x in ['seqname', 'strand', 'frame']]
-        self.parse_gtf(gtf)    
-        
+        self.parse_gtf(gtf)
+        self._initialize_csv()
+
+    def _initialize_csv(self):
+        with open(self.statscsv, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['gene_id', 'TSS', 'TES', 'num_isoforms', 'upper_bound', 'real_additional_nodes', 'num_solutions'])
+
+    def _write_group_stats_to_csv(self, gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions):
+        with open(self.statscsv, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow([gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions])
+
     def get_trees(self, chain_type: str = 'pexon_chain', transcript_group: str = 'tsstes_level', 
                   to_save: bool = True, statsfile='', gtfpredfile='',
                   formulation: str = 'SATSimple', xi_counts=None):
@@ -270,22 +285,36 @@ class Transcriptom():
                 self.bigGene += 1
                 continue
             print(f'Processing a transcript group of size {isoN} in gene {gid}')
-            
-            if (formulation == 'Random1') or (formulation == 'RandomX'):                
+
+            # Extract TSS and TES from the first chain
+            tss = chains_1_gene[0][0][1]  # TSS is the end of the first exon
+            tes = chains_1_gene[0][-1][0]  # TES is the start of the last exon
+
+            if (formulation == 'Random1') or (formulation == 'RandomX'):
                 assert xi_counts is not None
-                tsstes = f"s{chains_1_gene[0][0][1]}_t{chains_1_gene[0][-1][0]}"
-                txGroup = gid + "." + tsstes 
+                tsstes = f"s{tss}_t{tes}"
+                txGroup = gid + "." + tsstes
                 if formulation != 'RandomAll' and ((txGroup not in xi_counts) or (xi_counts[txGroup] < 1)): continue
                 randOutNum = xi_counts[txGroup] if formulation == 'RandomX' else 1
                 x = GeneChainToTree(chains_1_gene, randOutNum, formulation=formulation, args=self.args)
+                upper_bound_used = randOutNum
             else:
                 x = GeneChainToTree(chains_1_gene, self.maxAddlNodes, formulation=formulation, args=self.args)
-            
+                upper_bound_used = self.maxAddlNodes
+
             self.infeasiCount += 1 if not x.is_feasible() else 0
             addlN = x.get_minAddlNodes()
+
+            # Calculate number of solutions from tx_info
+            tx_info = x.get_tx_info()
+            num_solutions = tx_info[0]['solutions_total_num'] if len(tx_info) > 0 and 'solutions_total_num' in tx_info[0] else 0
+
+            # Write stats to CSV
+            self._write_group_stats_to_csv(gid, tss, tes, isoN, upper_bound_used, addlN, num_solutions)
+
             if x.is_feasible():
                 self.geneAddlnodeCounts[addlN] += 1
-                self.save_novel_gene_in_gtf(x.get_novel_transcripts(), x.get_tx_info(), gid, chain_type, addlN, file=gtfpredfile)
+                self.save_novel_gene_in_gtf(x.get_novel_transcripts(), tx_info, gid, chain_type, addlN, file=gtfpredfile)
             self.IsoCountAddlnodeCounts[(addlN, isoN)] += 1
             self.AddlnodeIsoCountCounts[(isoN, addlN)] += 1 
 
@@ -694,7 +723,7 @@ def main():
     transcript_group = 'tsstes_level'
     save_basename = args.output_prefix
 
-    tsm = Transcriptom(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', args=args)
+    tsm = Transcriptom(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', statscsv='stats.csv', args=args)
 
     if (formulation=='Random1') or (formulation == 'RandomX'):
         assert args.xi_gtf_file is not None 

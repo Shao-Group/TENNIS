@@ -40,6 +40,7 @@ except ImportError:
     from heuristicSolver import HeuristicSolver
     from util import *
     from bound import boundComputer
+import datetime
 from pysat.card import EncType, CardEnc
 from pysat.solvers import Solver
 from pysat.formula import Atom, IDPool, CNF, PYSAT_TRUE, PYSAT_FALSE #, Neg
@@ -216,7 +217,7 @@ class PhylogenTreeSolver():
             return 0
             
         for i in range(self.maxAddlNodes + 1):
-            # print("Current add'l nodes: ", i)
+            print("Current add'l nodes: ", i, datetime.datetime.now()) #CLEAN:
             if self.formulation == 'HeuristicAndSAT' and i == 0:
                 # try heuristic first when i == 0
                 heuristic_solver = self.create_heuristic_solver_with_timeout(self.knownTx, self.bound_computer, timeout_seconds=self.time_limit)

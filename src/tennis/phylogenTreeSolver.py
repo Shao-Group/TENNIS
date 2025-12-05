@@ -68,6 +68,7 @@ class PhylogenTreeSolver():
         self.numExons = len(knownTx[0])
         self.minAddlNodes = -1
         self.maxAddlNodes = maxAddlNodes
+        self.computed_upper_bound = -1      # The upper bound computed by MST/hub method
         self.solver = solver
         self.novelTx = []
         self.novelTxInfo = []
@@ -97,8 +98,14 @@ class PhylogenTreeSolver():
         return self.novelTx, self.novelTxInfo
 
     def get_minAddlNodes(self) -> int:
-        return self.minAddlNodes 
-    
+        return self.minAddlNodes
+
+    def get_computed_upper_bound(self) -> int:
+        return self.computed_upper_bound
+
+    def get_max_nodes_used(self) -> int:
+        return self.maxAddlNodes
+
     def is_feasible(self) -> bool:
         return self.minAddlNodes != -1
 
@@ -170,18 +177,20 @@ class PhylogenTreeSolver():
     def __get_maxAddlNodes(self) -> int:
         # Use boundComputer to get a much better upper bound
         self.bound_computer = boundComputer(self.knownTx, method=self.upper_bound_method)
-        
+
         # Early return if only 1 connected component (no additional nodes needed)
         if self.bound_computer.get_connected_components_count() <= 1:
             print("Only 1 connected component found. No additional nodes needed.")
+            self.computed_upper_bound = 0
             self.maxAddlNodes = 0
             self.minAddlNodes = 0
             # Set as feasible since no additional nodes needed
             return 0
-        
+
         # Get sophisticated upper bound from boundComputer
         computed_upper_bound = self.bound_computer.get_upper_bound()
-        
+        self.computed_upper_bound = computed_upper_bound  # Store for CSV output
+
         # Use the minimum of the computed bound and the user-specified max
         if self.maxAddlNodes <= 0:
             self.maxAddlNodes = computed_upper_bound

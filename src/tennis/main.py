@@ -73,6 +73,8 @@ class GeneChainToTree():
         self.__timed_out = False
         self.__is_feasible  = False
         self.__minAddlNodes = -1
+        self.__computed_upper_bound = -1  # Upper bound computed by MST/hub method
+        self.__max_nodes_used = -1  # Actual max nodes used (min of computed and user-specified)
         self.__novel_binaries = [] # multiple solutions (3D) of 2D array
         self.__novel_info = []
         if formulation == "RandomAll" or formulation == "Random1":
@@ -91,6 +93,12 @@ class GeneChainToTree():
 
     def is_timed_out(self):
         return self.__timed_out
+
+    def get_computed_upper_bound(self):
+        return self.__computed_upper_bound
+
+    def get_max_nodes_used(self):
+        return self.__max_nodes_used
 
     # use novel binary matrix to return novel feature chains
     def get_novel_transcripts(self):
@@ -144,6 +152,8 @@ class GeneChainToTree():
                                        time_limit=self.args.time_out, upper_bound_method=self.args.upper_bound_method)
         self.__is_feasible  = treeSolver.is_feasible()
         self.__minAddlNodes = treeSolver.get_minAddlNodes()
+        self.__computed_upper_bound = treeSolver.get_computed_upper_bound()
+        self.__max_nodes_used = treeSolver.get_max_nodes_used()
         self.__timed_out = treeSolver.is_timed_out()
         self.__novel_binaries, self.__novel_info = treeSolver.get_novelTx_and_info()
         return 0
@@ -152,6 +162,8 @@ class GeneChainToTree():
         bmatrix = self.__binaries
         self.__is_feasible  = True
         self.__minAddlNodes = sol_num
+        self.__computed_upper_bound = sol_num  # For random solutions, use the same value
+        self.__max_nodes_used = sol_num  # For random solutions, use the same value
         self.__timed_out = False
         self.__set_trivial_cols()
         assert(len(self.__binaries) >= 1)
@@ -259,12 +271,12 @@ class Transcriptom():
     def _initialize_csv(self):
         with open(self.statscsv, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(['gene_id', 'TSS', 'TES', 'num_isoforms', 'upper_bound', 'real_additional_nodes', 'num_solutions', 'time_out'])
+            writer.writerow(['gene_id', 'TSS', 'TES', 'num_isoforms', 'computed_upper_bound', 'max_nodes_used', 'real_additional_nodes', 'num_solutions', 'time_out'])
 
-    def _write_group_stats_to_csv(self, gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions, time_out):
+    def _write_group_stats_to_csv(self, gene_id, tss, tes, num_isoforms, computed_upper_bound, max_nodes_used, real_additional_nodes, num_solutions, time_out):
         with open(self.statscsv, 'a', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow([gene_id, tss, tes, num_isoforms, upper_bound, real_additional_nodes, num_solutions, time_out])
+            writer.writerow([gene_id, tss, tes, num_isoforms, computed_upper_bound, max_nodes_used, real_additional_nodes, num_solutions, time_out])
 
     def get_trees(self, chain_type: str = 'pexon_chain', transcript_group: str = 'tsstes_level', 
                   to_save: bool = True, statsfile='', gtfpredfile='',
@@ -300,10 +312,8 @@ class Transcriptom():
                 if formulation != 'RandomAll' and ((txGroup not in xi_counts) or (xi_counts[txGroup] < 1)): continue
                 randOutNum = xi_counts[txGroup] if formulation == 'RandomX' else 1
                 x = GeneChainToTree(chains_1_gene, randOutNum, formulation=formulation, args=self.args)
-                upper_bound_used = randOutNum
             else:
                 x = GeneChainToTree(chains_1_gene, self.maxAddlNodes, formulation=formulation, args=self.args)
-                upper_bound_used = self.maxAddlNodes
 
             self.infeasiCount += 1 if not x.is_feasible() else 0
             addlN = x.get_minAddlNodes()
@@ -315,8 +325,12 @@ class Transcriptom():
             # Get timeout status
             timed_out = x.is_timed_out()
 
+            # Get computed upper bound (from MST/hub method) and actual max nodes used
+            computed_upper_bound = x.get_computed_upper_bound()
+            max_nodes_used = x.get_max_nodes_used()
+
             # Write stats to CSV
-            self._write_group_stats_to_csv(gid, tss, tes, isoN, upper_bound_used, addlN, num_solutions, timed_out)
+            self._write_group_stats_to_csv(gid, tss, tes, isoN, computed_upper_bound, max_nodes_used, addlN, num_solutions, timed_out)
 
             if x.is_feasible():
                 self.geneAddlnodeCounts[addlN] += 1

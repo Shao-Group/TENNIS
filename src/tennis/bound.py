@@ -73,11 +73,75 @@ class boundComputer:
         return 0
     
     def _comp_hamming_distance(self):
-        """Compute hamming distances for all pairs and store them."""
-        matrix_expanded1 = self.matrix[:, np.newaxis, :]
-        matrix_expanded2 = self.matrix[np.newaxis, :, :]
-        self.hamming_distances = np.sum(matrix_expanded1 != matrix_expanded2, axis=2)
+        """Compute hamming distances for all pairs, considering partial exons.
+
+        Consecutive differences (partial exons) count as a single difference.
+        For example, comparing [0,0,0,1] with [1,1,1,1] should give distance 1,
+        not 3, because the first three positions form a consecutive region.
+        """
+        n_vectors = len(self.matrix)
+        self.hamming_distances = np.zeros((n_vectors, n_vectors), dtype=int)
+
+        # Compute distance for each pair
+        for i in range(n_vectors):
+            for j in range(i + 1, n_vectors):
+                distance = self._compute_partial_exon_distance(self.matrix[i], self.matrix[j])
+                self.hamming_distances[i, j] = distance
+                self.hamming_distances[j, i] = distance
+
         return 0
+
+    def _compute_partial_exon_distance(self, vec1: np.ndarray, vec2: np.ndarray) -> int:
+        """Compute distance between two vectors considering partial exons.
+
+        Optimized algorithm:
+        1. Compute dup_indicators for both vectors
+        2. Compute partial_exon_pos = Vec1_dup AND Vec2_dup
+        3. Build mask of positions to count: [True] + [NOT partial_exon_pos[i-1] for i in 1..n-1]
+        4. Filter vectors by mask and compute hamming distance on filtered vectors
+
+        Examples:
+        - [1,1] vs [0,0]:
+          Vec1_dup=[T], Vec2_dup=[T], partial=[T]
+          Mask=[T,F], filtered: [1] vs [0] → distance = 1 ✓
+
+        - [1,0] vs [0,1]:
+          Vec1_dup=[F], Vec2_dup=[F], partial=[F]
+          Mask=[T,T], filtered: [1,0] vs [0,1] → distance = 2 ✓
+
+        - [1,1,0] vs [0,0,1]:
+          Vec1_dup=[T,F], Vec2_dup=[T,F], partial=[T,F]
+          Mask=[T,F,T], filtered: [1,0] vs [0,1] → distance = 2 ✓
+        """
+        n = len(vec1)
+
+        # If vectors are identical, distance is 0
+        if np.array_equal(vec1, vec2):
+            return 0
+
+        if n == 1:
+            return 1 if vec1[0] != vec2[0] else 0
+
+        # Step 1 & 2: Compute dup_indicators (length n-1)
+        vec1_dup_indicator = (vec1[:-1] == vec1[1:])
+        vec2_dup_indicator = (vec2[:-1] == vec2[1:])
+
+        # Step 3: Compute partial_exon_pos (length n-1)
+        partial_exon_pos = np.logical_and(vec1_dup_indicator, vec2_dup_indicator)
+
+        # Step 4: Build mask - position 0 always True, position i where partial_exon_pos[i-1] is False
+        mask = np.ones(n, dtype=bool)
+        mask[0] = True
+        mask[1:] = ~partial_exon_pos
+
+        # Step 5: Filter vectors and compute hamming distance
+        vec1_filtered = vec1[mask]
+        vec2_filtered = vec2[mask]
+
+        # Hamming distance on filtered vectors
+        distance = np.sum(vec1_filtered != vec2_filtered)
+
+        return int(distance)
 
     def _build_graph(self) -> None:
         """Build graph where nodes are vectors and edges connect vectors differing by 1 bit."""

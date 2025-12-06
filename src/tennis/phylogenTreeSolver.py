@@ -231,7 +231,7 @@ class PhylogenTreeSolver():
                 # try heuristic first when i == 0
                 heuristic_solver = self.create_heuristic_solver_with_timeout(self.knownTx, self.bound_computer, timeout_seconds=self.time_limit)
                 if heuristic_solver is None:
-                    print("HeuristicSolver timed out after 10 minutes, continuing with SAT solver")
+                    print("HeuristicSolver timed out, continuing with SAT solver")
                 elif heuristic_solver is not None and heuristic_solver.is_feasible:
                     if heuristic_solver.min_additional_nodes > self.maxAddlNodes:
                         return -1  # cannot finish within maxAddlNodes

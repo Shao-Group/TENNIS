@@ -431,8 +431,9 @@ class PhylogenTreeSolver():
         satSolver.append_formula([c for c in treeSatisfy if len(c) > 0])
 
         timed_out = False
-        
+
         def sat_interrupt(s: Solver):
+            nonlocal timed_out
             s.interrupt()
             timed_out = True
             

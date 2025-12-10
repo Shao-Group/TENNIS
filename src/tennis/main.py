@@ -173,7 +173,7 @@ class GeneChainToTree():
         
         keep = []
         counter = 0
-        for r in produce_random([0,1], non_trivial_width):
+        for r in produce_random([0,1], non_trivial_width, seed=self.args.seed):
             h = hash_as_str(r)
             if h in known_h:
                 continue
@@ -708,6 +708,7 @@ def parse_arguments():
     else:
         parser.formulation = "HeuristicAndSAT"
 
+    parser.add_argument("--seed", type=int, default=2024, help="Random seed for reproducibility (default: 2024)")
     parser.add_argument("gtf_file", type=str, help="Input GTF file")
     args = parser.parse_args(args)
     if not is_test:
@@ -726,11 +727,10 @@ def parse_arguments():
 
 
 def main():
-    random.seed(2024)
+    args = parse_arguments()
+    random.seed(args.seed)
     d0 = datetime.today().strftime('%Y-%m-%d')
     t0 = datetime.today().strftime('%H:%M:%S')
-
-    args = parse_arguments()
 
     # Print command line and arguments
     print("All arguments:", args)

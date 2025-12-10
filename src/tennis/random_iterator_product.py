@@ -87,8 +87,8 @@ class random_self_cartesian_product:
             return x
         
 
-def produce_random(l, r):
-    random.seed(2024)
+def produce_random(l, r, seed=2024):
+    random.seed(seed)
     recursion_limit = sys.getrecursionlimit()
     if 10 * r >= recursion_limit:
         sys.setrecursionlimit(10 * r) 

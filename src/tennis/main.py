@@ -309,7 +309,8 @@ class Transcriptom():
                 assert xi_counts is not None
                 tsstes = f"s{tss}_t{tes}"
                 txGroup = gid + "." + tsstes
-                if formulation != 'RandomAll' and ((txGroup not in xi_counts) or (xi_counts[txGroup] < 1)): continue
+                if (txGroup not in xi_counts) or (xi_counts[txGroup] < 1):
+                    continue
                 randOutNum = xi_counts[txGroup] if formulation == 'RandomX' else 1
                 x = GeneChainToTree(chains_1_gene, randOutNum, formulation=formulation, args=self.args)
             else:

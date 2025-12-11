@@ -38,6 +38,8 @@ from .random_iterator_product import produce_random
 from .phylogenTreeSolver import PhylogenTreeSolver
 from .GTF import parse as parse_gtf_line
 from .GTF import get_xi_counts
+from .fileParser import parse_psi_file
+from .fileParser import parse_chr_translate_file
 from .util import *
 from .util import IS_TEST as util_IS_TEST
 from typing import List
@@ -59,11 +61,13 @@ class GeneChainToTree():
     # given chains of a gene (2D matrix)
     # make binary representation
     # then construct tree
-    def __init__(self, chains, maxAddlNodes, formulation:str = 'SATSimple', args = None):
+    def __init__(self, chains, maxAddlNodes, formulation:str = 'SATSimple', args = None, psi_data = None, chrom = None):
         self.chains = chains
         self.__maxAddlNodes = maxAddlNodes
         self.formulation = formulation
         self.args = args
+        self.__psi_data = psi_data  # dict: (chrom, start, end) -> avg PSI (chrom already in GTF naming)
+        self.__chrom = chrom  # chromosome for this gene (GTF name)
         self.__exons = []
         self.__binaries = []
         self.__trivial_cols = dict() # col: val
@@ -81,6 +85,10 @@ class GeneChainToTree():
             self.__random_sol(1)
         elif formulation == "RandomX":
             self.__random_sol(self.__maxAddlNodes)
+        elif formulation == "PSI1":
+            self.__psi_sol(1)
+        elif formulation == "PSIX":
+            self.__psi_sol(self.__maxAddlNodes)
         else:
             self.__contruct_tree()
         assert self.__is_feasible == (self.__minAddlNodes >= 0)
@@ -220,17 +228,222 @@ class GeneChainToTree():
             print(f'GeneChainToTree random {sol_num} sols, Add\'l Nodes {self.__minAddlNodes}')
 
     # self.__trivial_cols = dict() # col: val
+    # trivial cols are constitutive exons or introns
     def __set_trivial_cols(self):
         assert(len(self.__trivial_cols) == 0)
         assert(len(self.__binaries) >= 1)
         width = len(self.__binaries[0])
         for i in range(width):
-            s = sum([x[i] for x in self.__binaries]) 
+            s = sum([x[i] for x in self.__binaries])
             if s == 0:
                 self.__trivial_cols[i] = 0
             elif s == len(self.__binaries):
                 self.__trivial_cols[i] = 1
         return 0
+
+    def __psi_sol(self, sol_num):
+        """
+        Generate novel isoforms by selecting exon combinations that maximize
+        the product of PSI probabilities.
+
+        For each exon:
+        - If exon is in PSI file: use PSI/100 for inclusion, (100-PSI)/100 for exclusion
+        - If exon is not in PSI file: estimate PSI from usage frequency in existing isoforms
+
+        Uses hybrid approach:
+        - For small non_trivial_width (<=8): exhaustive enumeration
+        - For larger cases: heap-based optimization
+        """
+        import math
+        import heapq
+
+        self.__is_feasible = True
+        self.__minAddlNodes = sol_num
+        self.__computed_upper_bound = sol_num
+        self.__max_nodes_used = sol_num
+        self.__timed_out = False
+        self.__set_trivial_cols()
+
+        assert(len(self.__binaries) >= 1)
+        width = len(self.__binaries[0])
+        non_trivial_width = width - len(self.__trivial_cols)
+
+        # Get hashes of known isoforms (only non-trivial columns)
+        known_h = set([hash_as_str([x[i] for i in range(width) if i not in self.__trivial_cols]) for x in self.__binaries])
+
+        # Map non-trivial column indices to their original indices
+        non_trivial_indices = [i for i in range(width) if i not in self.__trivial_cols]
+
+        # Get PSI values for each non-trivial exon
+        psi_for_nontrivial = []
+        for orig_idx in non_trivial_indices:
+            exon = self.__exons[orig_idx]  # (start, end) tuple
+            psi_val = self.__get_psi_for_exon(exon, orig_idx)
+            psi_for_nontrivial.append(psi_val)
+
+        # Choose algorithm based on non_trivial_width
+        if non_trivial_width <= 8:
+            # Exhaustive enumeration for small cases (max 256 combinations)
+            keep = self.__psi_sol_exhaustive(sol_num, non_trivial_width, psi_for_nontrivial, known_h, math)
+        else:
+            # Heap-based optimization for larger cases
+            keep = self.__psi_sol_heap(sol_num, non_trivial_width, psi_for_nontrivial, known_h, math, heapq)
+
+        if len(keep) < sol_num:
+            # Not enough unique candidates
+            if len(keep) == 0:
+                self.__is_feasible = False
+                self.__minAddlNodes = -1
+                return
+            else:
+                # Use what we have
+                sol_num = len(keep)
+                self.__minAddlNodes = sol_num
+
+        # Put back trivial columns
+        keepwtrivial = [None] * len(keep)
+        for ikeep in range(len(keep)):
+            l = keep[ikeep]
+            p = [None] * width
+            for k, v in self.__trivial_cols.items():
+                p[k] = v
+
+            l_idx = 0
+            for i in range(width):
+                if p[i] is None:
+                    assert l_idx < non_trivial_width
+                    p[i] = l[l_idx]
+                    l_idx += 1
+            keepwtrivial[ikeep] = p
+
+        for k in keepwtrivial:
+            assert None not in k
+
+        self.__novel_binaries = keepwtrivial
+        self.__novel_info = [dict()] * len(keepwtrivial)
+        print(f'GeneChainToTree PSI {sol_num} sols, Add\'l Nodes {self.__minAddlNodes}')
+
+    def __psi_sol_exhaustive(self, sol_num, non_trivial_width, psi_for_nontrivial, known_h, math):
+        """
+        Exhaustive enumeration for small non_trivial_width (<=8).
+        Generates all 2^n combinations, calculates probabilities, and returns top sol_num.
+        """
+        import itertools
+
+        candidates = []
+        for bits in itertools.product([0, 1], repeat=non_trivial_width):
+            bits_list = list(bits)
+            h = hash_as_str(bits_list)
+            if h in known_h:
+                continue  # Skip existing isoforms
+
+            # Calculate log probability (use log to avoid underflow)
+            log_prob = 0.0
+            for j, bit in enumerate(bits_list):
+                psi = psi_for_nontrivial[j]
+                if bit == 1:
+                    prob = psi / 100.0
+                else:
+                    prob = (100.0 - psi) / 100.0
+                prob = max(prob, 1e-10)
+                log_prob += math.log(prob)
+
+            candidates.append((log_prob, bits_list))
+
+        # Sort by probability (descending) and take top sol_num
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return [c[1] for c in candidates[:sol_num]]
+
+    def __psi_sol_heap(self, sol_num, non_trivial_width, psi_for_nontrivial, known_h, math, heapq):
+        """
+        Heap-based optimization for larger non_trivial_width (>8).
+        Generates candidates in order of probability by exploring deviations from optimal.
+        """
+        n = non_trivial_width
+
+        # 1. Compute optimal assignment and flip costs for each position
+        optimal = []
+        flip_costs = []  # cost of flipping each bit from optimal (always negative or zero)
+        base_log_prob = 0.0
+
+        for psi in psi_for_nontrivial:
+            if psi >= 50:
+                optimal.append(1)
+                base_log_prob += math.log(max(psi / 100.0, 1e-10))
+                # flip cost: log((100-psi)/100) - log(psi/100)
+                flip_cost = math.log(max((100.0 - psi) / 100.0, 1e-10)) - math.log(max(psi / 100.0, 1e-10))
+            else:
+                optimal.append(0)
+                base_log_prob += math.log(max((100.0 - psi) / 100.0, 1e-10))
+                # flip cost: log(psi/100) - log((100-psi)/100)
+                flip_cost = math.log(max(psi / 100.0, 1e-10)) - math.log(max((100.0 - psi) / 100.0, 1e-10))
+            flip_costs.append(flip_cost)
+
+        # 2. Use min-heap to enumerate candidates by total flip cost
+        # State: (total_flip_cost, flipped_positions_tuple)
+        # Start with optimal (no flips)
+        heap = [(0.0, ())]  # (cost, flipped_indices)
+        visited = set()
+        candidates = []
+
+        while heap and len(candidates) < sol_num:
+            cost, flipped = heapq.heappop(heap)
+            if flipped in visited:
+                continue
+            visited.add(flipped)
+
+            # Generate candidate from flipped positions
+            candidate = optimal.copy()
+            for idx in flipped:
+                candidate[idx] = 1 - candidate[idx]
+
+            # Check if not in known isoforms
+            h = hash_as_str(candidate)
+            if h not in known_h:
+                candidates.append(candidate)
+                if len(candidates) >= sol_num:
+                    break
+
+            # Add neighbors: flip one more position (only positions after last flipped to avoid duplicates)
+            start_idx = flipped[-1] + 1 if flipped else 0
+            for next_idx in range(start_idx, n):
+                new_flipped = flipped + (next_idx,)
+                new_cost = cost + flip_costs[next_idx]
+                if new_flipped not in visited:
+                    heapq.heappush(heap, (new_cost, new_flipped))
+
+        return candidates
+
+    def __get_psi_for_exon(self, exon, col_idx):
+        """
+        Get PSI value for an exon.
+
+        1. First try to look up in PSI file using exact coordinates
+           (PSI file chr names are already translated to GTF names at load time)
+        2. If not found, estimate from usage frequency in existing isoforms
+
+        Args:
+            exon: (start, end) tuple
+            col_idx: column index in the binary matrix
+
+        Returns:
+            PSI value (0-100)
+        """
+        # Try to find in PSI file (chr names already translated to GTF convention)
+        if self.__psi_data is not None and self.__chrom is not None:
+            key = (self.__chrom, exon[0], exon[1])
+            if key in self.__psi_data:
+                return self.__psi_data[key]
+
+        # Estimate from usage frequency in existing isoforms
+        # Count how many isoforms include this exon
+        usage_count = sum([x[col_idx] for x in self.__binaries])
+        total_isoforms = len(self.__binaries)
+
+        # Convert to percentage (PSI-like value)
+        estimated_psi = (usage_count / total_isoforms) * 100.0
+
+        return estimated_psi
         
 
 
@@ -278,9 +491,9 @@ class Transcriptom():
             writer = csv.writer(csvfile)
             writer.writerow([gene_id, tss, tes, num_isoforms, computed_upper_bound, max_nodes_used, real_additional_nodes, num_solutions, time_out])
 
-    def get_trees(self, chain_type: str = 'pexon_chain', transcript_group: str = 'tsstes_level', 
+    def get_trees(self, chain_type: str = 'pexon_chain', transcript_group: str = 'tsstes_level',
                   to_save: bool = True, statsfile='', gtfpredfile='',
-                  formulation: str = 'SATSimple', xi_counts=None):
+                  formulation: str = 'SATSimple', xi_counts=None, psi_data=None):
         if statsfile == '':
             statsfile = self.statsfile
         if gtfpredfile == '':
@@ -305,6 +518,9 @@ class Transcriptom():
             tss = chains_1_gene[0][0][1]  # TSS is the end of the first exon
             tes = chains_1_gene[0][-1][0]  # TES is the start of the last exon
 
+            # Get chromosome for this gene (needed for PSI lookup)
+            chrom = self.gene2basicinfo[gid][0] if gid in self.gene2basicinfo else None
+
             if (formulation == 'Random1') or (formulation == 'RandomX'):
                 assert xi_counts is not None
                 tsstes = f"s{tss}_t{tes}"
@@ -313,6 +529,14 @@ class Transcriptom():
                     continue
                 randOutNum = xi_counts[txGroup] if formulation == 'RandomX' else 1
                 x = GeneChainToTree(chains_1_gene, randOutNum, formulation=formulation, args=self.args)
+            elif (formulation == 'PSI1') or (formulation == 'PSIX'):
+                assert xi_counts is not None
+                tsstes = f"s{tss}_t{tes}"
+                txGroup = gid + "." + tsstes
+                if (txGroup not in xi_counts) or (xi_counts[txGroup] < 1):
+                    continue
+                psiOutNum = xi_counts[txGroup] if formulation == 'PSIX' else 1
+                x = GeneChainToTree(chains_1_gene, psiOutNum, formulation=formulation, args=self.args, psi_data=psi_data, chrom=chrom)
             else:
                 x = GeneChainToTree(chains_1_gene, self.maxAddlNodes, formulation=formulation, args=self.args)
 
@@ -704,13 +928,15 @@ def parse_arguments():
     parser.add_argument(      "--upper_bound_method", type=str, default="mst",    choices=["mst", "hub", "both"], help="Method for computing upper bound: 'mst' (MST-based, default), 'hub' (hub-based), or 'both' (minimum of both methods)")
     parser.add_argument(      "--time_out",           type=int, default=900,      help="Each SAT instance time out in seconds")
     if is_test:
-        parser.add_argument("-f", "--formulation", type=str, default="HeuristicAndSAT", choices=["HeuristicAndSAT", "SATSimple", "Random1", "RandomX"], help="Formulation type")
+        parser.add_argument("-f", "--formulation", type=str, default="HeuristicAndSAT", choices=["HeuristicAndSAT", "SATSimple", "Random1", "RandomX", "PSI1", "PSIX"], help="Formulation type")
+        parser.add_argument("--seed", type=int, default=2024, help="Random seed for reproducibility (default: 2024)")
         parser.add_argument("--xi_gtf_file", type=str, default=None, help="gtf file from TENNIS with Ti information")
+        parser.add_argument("--psi_file", type=str, default=None, help="PSI file with exon usage data for PSI1/PSIX formulations")
+        parser.add_argument("--chr_translate_file", type=str, default=None, help="TSV file to translate chromosome names from GTF to PSI file (col1: GTF chr, col2: PSI chr)")
     else:
         parser.formulation = "HeuristicAndSAT"
-
-    parser.add_argument("--seed", type=int, default=2024, help="Random seed for reproducibility (default: 2024)")
     parser.add_argument("gtf_file", type=str, help="Input GTF file")
+
     args = parser.parse_args(args)
     if not is_test:
         args.formulation = "HeuristicAndSAT"
@@ -724,7 +950,6 @@ def parse_arguments():
         print(f"Warning: --max_novel_isoform set to {args.max_novel_isoform}. Default is 4. Allowing too many isoforms will slow down the program.", file=sys.stderr)
         sleep(10)
     return args
-
 
 
 def main():
@@ -747,10 +972,23 @@ def main():
     tsm = Transcriptom(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', statscsv='stats.csv', args=args)
 
     if (formulation=='Random1') or (formulation == 'RandomX'):
-        assert args.xi_gtf_file is not None 
+        assert args.xi_gtf_file is not None
         _, xic = get_xi_counts(args.xi_gtf_file)
-        tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats', 
+        tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats',
                       gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation, xi_counts=xic)
+    elif (formulation == 'PSI1') or (formulation == 'PSIX'):
+        assert args.psi_file is not None, "PSI1/PSIX requires --psi_file"
+        assert args.xi_gtf_file is not None, "PSI1/PSIX requires --xi_gtf_file"
+        _, xic = get_xi_counts(args.xi_gtf_file)
+        # Load chromosome name translation if provided
+        chr_translate = None
+        if args.chr_translate_file is not None:
+            chr_translate = parse_chr_translate_file(args.chr_translate_file)
+            print(f"Loaded {len(chr_translate)} chromosome name translations from {args.chr_translate_file}")
+        psi_data = parse_psi_file(args.psi_file, chr_translate=chr_translate)
+        print(f"Loaded {len(psi_data)} exon PSI entries from {args.psi_file}")
+        tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats',
+                      gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation, xi_counts=xic, psi_data=psi_data)
     else:
         tsm.get_trees(statsfile=f'{save_basename}.stats', gtfpredfile=f'{save_basename}.pred.gtf', formulation=formulation)
     

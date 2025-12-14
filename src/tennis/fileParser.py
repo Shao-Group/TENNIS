@@ -31,7 +31,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
-
+import math
+from .GTF import parse as parse_gtf_line
 
 def parse_psi_file(psi_file, chr_translate=None):
     """
@@ -126,3 +127,144 @@ def parse_chr_translate_file(translate_file):
             psi_to_gtf[psi_chr] = gtf_chr
 
     return psi_to_gtf
+
+
+def compute_psi_scores_for_gtf(input_gtf, original_gtf, psi_data, output_gtf):
+    """
+    Compute PSI scores for predicted isoforms and write to output GTF.
+    The PSI_score is the product of all exon probabilities.
+    """
+
+    # Step 1: Parse original GTF to get exon usage statistics per gene
+    # gene_id -> {exon_coord -> count of isoforms containing it}
+    # gene_id -> total isoform count
+    gene_exon_counts = dict()  # gene_id -> {(start, end): count}
+    gene_isoform_counts = dict()  # gene_id -> total isoforms
+    gene_chrom = dict()  # gene_id -> chromosome
+
+    # First pass: count isoforms per gene
+    transcript_exons = dict()  # transcript_id -> [(start, end), ...]
+    transcript_gene = dict()  # transcript_id -> gene_id
+
+    with open(original_gtf, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            fields = parse_gtf_line(line)
+            if fields['feature'] == 'transcript':
+                gid = fields['gene_id']
+                tid = fields['transcript_id']
+                transcript_gene[tid] = gid
+                if gid not in gene_isoform_counts:
+                    gene_isoform_counts[gid] = 0
+                    gene_exon_counts[gid] = dict()
+                    gene_chrom[gid] = fields['seqname']
+                gene_isoform_counts[gid] += 1
+                transcript_exons[tid] = []
+            elif fields['feature'] == 'exon':
+                tid = fields['transcript_id']
+                start = int(fields['start'])
+                end = int(fields['end'])
+                if tid in transcript_exons:
+                    transcript_exons[tid].append((start, end))
+
+    # Count exon usage per gene
+    for tid, exons in transcript_exons.items():
+        gid = transcript_gene.get(tid)
+        if gid is None:
+            continue
+        for exon in exons:
+            if exon not in gene_exon_counts[gid]:
+                gene_exon_counts[gid][exon] = 0
+            gene_exon_counts[gid][exon] += 1
+
+    # Step 2: Parse predicted GTF and compute PSI scores
+    predicted_transcripts = dict()  # transcript_id -> {'exons': [...], 'line_fields': [...]}
+    predicted_lines = []  # All lines from predicted GTF
+
+    with open(input_gtf, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                predicted_lines.append(line)
+                continue
+            fields = parse_gtf_line(line)
+            predicted_lines.append(fields)
+
+            if fields['feature'] == 'exon':
+                tid = fields['transcript_id']
+                gid = fields['gene_id']
+                start = int(fields['start'])
+                end = int(fields['end'])
+                chrom = fields['seqname']
+
+                if tid not in predicted_transcripts:
+                    predicted_transcripts[tid] = {
+                        'exons': [],
+                        'gene_id': gid,
+                        'chrom': chrom
+                    }
+                predicted_transcripts[tid]['exons'].append((start, end))
+
+    # Step 3: Compute PSI score for each predicted transcript
+    transcript_psi_scores = dict()
+
+    for tid, tdata in predicted_transcripts.items():
+        exons = tdata['exons']
+        gid = tdata['gene_id']
+        chrom = tdata['chrom']
+
+        log_prob = 0.0
+        for exon in exons:
+            psi = _get_exon_psi(
+                exon, chrom, gid,
+                psi_data, gene_exon_counts, gene_isoform_counts
+            )
+            # PSI is probability of inclusion (0-100), convert to 0-1
+            prob = max(psi / 100.0, 1e-10)
+            log_prob += math.log(prob)
+
+        # Convert log probability to a score (exp of log_prob, or keep as log)
+        # Using exp can result in very small numbers, so we'll store the log probability
+        # Alternatively, compute geometric mean or just the raw probability
+        psi_score = math.exp(log_prob)
+        transcript_psi_scores[tid] = psi_score
+
+    # Step 4: Write output GTF with PSI_score attribute
+    with open(output_gtf, 'w') as f:
+        for line in predicted_lines:
+            if isinstance(line, str):
+                # Comment line
+                f.write(line)
+            else:
+                # Add PSI_score to transcript and exon lines
+                tid = line.get('transcript_id')
+                if tid and tid in transcript_psi_scores:
+                    line['PSI_score'] = f"{transcript_psi_scores[tid]:.6e}"
+
+                # Write line in GTF format
+                from .GTF import GTF_HEADER
+                sorted_keys = ['gene_id', 'transcript_id'] + sorted(
+                    [k for k in line.keys() if k not in ['gene_id', 'transcript_id'] + GTF_HEADER]
+                )
+                attributes = ' '.join([f'{k} "{line[k]}";' for k in sorted_keys if line.get(k) is not None])
+                eight_cols = [str(line[col]) if line.get(col) is not None else '.' for col in GTF_HEADER]
+                f.write('\t'.join(eight_cols) + '\t' + attributes + '\n')
+
+    print(f"Wrote {len(transcript_psi_scores)} transcripts with PSI scores to {output_gtf}")
+    return transcript_psi_scores
+
+
+def _get_exon_psi(exon, chrom, gene_id, psi_data, gene_exon_counts, gene_isoform_counts):
+    key = (chrom, exon[0], exon[1])
+    if key in psi_data:
+        return psi_data[key] * 100.0  # psi_data stores as fraction, convert to percentage
+
+    if gene_id in gene_exon_counts:
+        exon_count = gene_exon_counts[gene_id].get(exon, 0)
+        total_isoforms = gene_isoform_counts.get(gene_id, 1)
+        if exon_count > 0:
+            return min((exon_count / total_isoforms) * 100.0, 100.0)
+        else:
+            return 50.0
+    else:
+        return 50.0

@@ -40,6 +40,7 @@ from .GTF import parse as parse_gtf_line
 from .GTF import get_xi_counts
 from .fileParser import parse_psi_file
 from .fileParser import parse_chr_translate_file
+from .fileParser import compute_psi_scores_for_gtf
 from .util import *
 from .util import IS_TEST as util_IS_TEST
 from typing import List
@@ -928,11 +929,12 @@ def parse_arguments():
     parser.add_argument(      "--upper_bound_method", type=str, default="mst",    choices=["mst", "hub", "both"], help="Method for computing upper bound: 'mst' (MST-based, default), 'hub' (hub-based), or 'both' (minimum of both methods)")
     parser.add_argument(      "--time_out",           type=int, default=900,      help="Each SAT instance time out in seconds")
     if is_test:
-        parser.add_argument("-f", "--formulation", type=str, default="HeuristicAndSAT", choices=["HeuristicAndSAT", "SATSimple", "Random1", "RandomX", "PSI1", "PSIX"], help="Formulation type")
+        parser.add_argument("-f", "--formulation", type=str, default="HeuristicAndSAT", choices=["HeuristicAndSAT", "SATSimple", "Random1", "RandomX", "PSI1", "PSIX", "ScorePSI"], help="Formulation type")
         parser.add_argument("--seed", type=int, default=2024, help="Random seed for reproducibility (default: 2024)")
         parser.add_argument("--xi_gtf_file", type=str, default=None, help="gtf file from TENNIS with Ti information")
         parser.add_argument("--psi_file", type=str, default=None, help="PSI file with exon usage data for PSI1/PSIX formulations")
-        parser.add_argument("--chr_translate_file", type=str, default=None, help="TSV file to translate chromosome names from GTF to PSI file (col1: GTF chr, col2: PSI chr)")
+        parser.add_argument("--chr_translate_file", type=str, default=None, help="TSV file to translate chromosome names from PSI to GTF file (col1: PSI chr, col2: GTF chr)")
+        parser.add_argument("--predicted_gtf", type=str, default=None, help="Predicted GTF file to score with PSI values (for ScorePSI formulation)")
     else:
         parser.formulation = "HeuristicAndSAT"
     parser.add_argument("gtf_file", type=str, help="Input GTF file")
@@ -971,7 +973,18 @@ def main():
 
     tsm = Transcriptom(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', statscsv='stats.csv', args=args)
 
-    if (formulation=='Random1') or (formulation == 'RandomX'):
+    if formulation == 'ScorePSI':
+        assert args.psi_file is not None, "ScorePSI requires --psi_file"
+        assert args.predicted_gtf is not None, "ScorePSI requires --predicted_gtf"
+        chr_translate = None
+        if args.chr_translate_file is not None:
+            chr_translate = parse_chr_translate_file(args.chr_translate_file)
+            print(f"Loaded {len(chr_translate)} chromosome name translations from {args.chr_translate_file}")
+        psi_data = parse_psi_file(args.psi_file, chr_translate=chr_translate)
+        print(f"Loaded {len(psi_data)} exon PSI entries from {args.psi_file}")
+        output_gtf = f'{save_basename}.scored.gtf'
+        compute_psi_scores_for_gtf(args.predicted_gtf, gtf_file, psi_data, output_gtf)
+    elif (formulation=='Random1') or (formulation == 'RandomX'):
         assert args.xi_gtf_file is not None
         _, xic = get_xi_counts(args.xi_gtf_file)
         tsm.get_trees(chain_type, transcript_group, statsfile=f'{save_basename}.stats',

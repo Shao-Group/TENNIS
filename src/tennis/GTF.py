@@ -166,8 +166,9 @@ def get_xi_counts(gtf):
     f.close()
     return gid2xi, tgroup2xi
 
-def get_PctIn(gtf):
-    tid2PctIn = dict()
+# return {tid: attr, attr2} a tuple
+def get_attr(gtf, attr_name, attr_name2 = None):
+    tid2attr = dict()
 
     f = open(gtf, 'r')
     for line in f.readlines():
@@ -175,11 +176,11 @@ def get_PctIn(gtf):
         fields = parse(line)
         gid = fields['gene_id']
         tid = fields['transcript_id']
-        pctIn = float(fields['PctIn'])
-
-        if tid not in tid2PctIn:
-            tid2PctIn[tid] = pctIn
+        attr = float(fields[attr_name])
+        attr2 = float(fields[attr_name2]) if attr_name2 is not None else None
+        if tid not in tid2attr:
+            tid2attr[tid] = (attr, attr2)
         else:
-            assert tid2PctIn[tid] == pctIn
+            assert tid2attr[tid] == (attr, attr2)
     f.close()
-    return tid2PctIn
+    return tid2attr

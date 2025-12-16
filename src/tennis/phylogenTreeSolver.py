@@ -234,12 +234,15 @@ class PhylogenTreeSolver():
                     print("HeuristicSolver timed out, continuing with SAT solver")
                 elif heuristic_solver is not None and heuristic_solver.is_feasible:
                     if heuristic_solver.min_additional_nodes > self.maxAddlNodes:
-                        return -1  # cannot finish within maxAddlNodes
-                    self.minAddlNodes = heuristic_solver.min_additional_nodes
-                    assert self.minAddlNodes >= 0
-                    self.__remove_dup_novel_solution_and_get_mult_sol_info(heuristic_solver.all_solutions)
-                    print(f"Heuristic found solution with {heuristic_solver.min_additional_nodes} add'l nodes")
-                    return heuristic_solver.min_additional_nodes
+                        # Heuristic needs more nodes than allowed, fall back to SAT solver
+                        print(f"Heuristic found {heuristic_solver.min_additional_nodes} nodes needed, exceeds max {self.maxAddlNodes}, falling back to SAT")
+                    else:
+                        # Heuristic found a valid solution within maxAddlNodes
+                        self.minAddlNodes = heuristic_solver.min_additional_nodes
+                        assert self.minAddlNodes >= 0
+                        self.__remove_dup_novel_solution_and_get_mult_sol_info(heuristic_solver.all_solutions)
+                        print(f"Heuristic found solution with {heuristic_solver.min_additional_nodes} add'l nodes")
+                        return heuristic_solver.min_additional_nodes
                 else:
                     # heuristic_solver did not solve
                     pass

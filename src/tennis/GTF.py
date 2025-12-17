@@ -167,13 +167,19 @@ def get_xi_counts(gtf):
     return gid2xi, tgroup2xi
 
 # return {tid: attr, attr2} a tuple
-def get_attr(gtf, attr_name, attr_name2 = None):
+def get_attr(gtf, attr_name, attr_name2 = None, filter_k=None, filter_v=None):
     tid2attr = dict()
 
     f = open(gtf, 'r')
     for line in f.readlines():
         if line.startswith('#'): continue
         fields = parse(line)
+
+        # Apply filter if specified
+        if filter_k is not None and filter_v is not None:
+            if str(fields.get(filter_k)) != str(filter_v):
+                continue
+
         gid = fields['gene_id']
         tid = fields['transcript_id']
         attr = float(fields[attr_name])

@@ -448,7 +448,7 @@ class GeneChainToTree():
         
 
 
-class Transcriptom():
+class Transcriptome():
     def __init__(self, gtf: str, statsfile='', gtfpredfile='', statscsv='', ignore_single_exon_isoform: bool = True, args = None):
         self.gtf_input  = gtf
         self.statsfile   = statsfile   if statsfile   != '' else basename(gtf) + '.stats'
@@ -971,7 +971,7 @@ def main():
     transcript_group = 'tsstes_level'
     save_basename = args.output_prefix
 
-    tsm = Transcriptom(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', statscsv='stats.csv', args=args)
+    tsm = Transcriptome(gtf_file, f'{save_basename}.stats', f'{save_basename}.pred.gtf', statscsv='stats.csv', args=args)
 
     if formulation == 'ScorePSI':
         assert args.psi_file is not None, "ScorePSI requires --psi_file"

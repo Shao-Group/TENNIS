@@ -85,12 +85,8 @@ class HeuristicSolver:
         min_distance = float('inf')
         best_pairs = []
         
-        # Vectorized computation of all pairwise distances
-        matrix_cc1 = self.matrix[cc1]  # Shape: (len(cc1), num_features)
-        matrix_cc2 = self.matrix[cc2]  # Shape: (len(cc2), num_features)
-
-        # Broadcast and compute all pairwise distances at once
-        distances = np.sum(matrix_cc1[:, np.newaxis] != matrix_cc2[np.newaxis, :], axis=2)
+        # Use precomputed partial-exon-aware distances from boundComputer
+        distances = self.bound_computer.hamming_distances[np.ix_(cc1, cc2)]
 
         # Find minimum distance and all pairs with that distance
         min_distance = np.min(distances)
@@ -109,6 +105,35 @@ class HeuristicSolver:
             # Generate all possible minimum solutions
             self._generate_all_paths(best_pairs, min_distance)
     
+    def _get_event_groups(self, vec1: np.ndarray, vec2: np.ndarray) -> List[List[int]]:
+        """Group differing positions into AS-event blocks using partial-exon logic.
+
+        Matches boundComputer._compute_partial_exon_distance: consecutive positions
+        where both vectors have dup_indicators form a single event.
+        """
+        n = len(vec1)
+        if n == 1:
+            return [[0]] if vec1[0] != vec2[0] else []
+
+        vec1_dup = (vec1[:-1] == vec1[1:])
+        vec2_dup = (vec2[:-1] == vec2[1:])
+        partial_exon_pos = np.logical_and(vec1_dup, vec2_dup)
+
+        mask = np.ones(n, dtype=bool)
+        mask[1:] = ~partial_exon_pos
+
+        groups = []
+        current_group = [0]
+        for i in range(1, n):
+            if mask[i]:
+                groups.append(current_group)
+                current_group = [i]
+            else:
+                current_group.append(i)
+        groups.append(current_group)
+
+        return [g for g in groups if vec1[g[0]] != vec2[g[0]]]
+
     def _generate_all_paths(self, best_pairs: List[Tuple[int, int]], distance: int) -> None:
         """Generate all possible paths between the two components."""
         all_solutions = []
@@ -118,12 +143,10 @@ class HeuristicSolver:
             vec1 = self.matrix[node1_idx]
             vec2 = self.matrix[node2_idx]
             
-            # Find all positions where vectors differ
-            diff_positions = np.where(vec1 != vec2)[0]
-            assert len(diff_positions) == distance
-            
-            # Generate all possible intermediate paths
-            paths = self._enumerate_paths(vec1, vec2, diff_positions)
+            event_groups = self._get_event_groups(vec1, vec2)
+            assert len(event_groups) == distance
+
+            paths = self._enumerate_paths(vec1, vec2, event_groups)
             
             for path in paths:
                 all_solutions.append(path)
@@ -140,27 +163,30 @@ class HeuristicSolver:
         self.all_solutions = all_solutions
         self.solution_info = all_info
     
-    def _enumerate_paths(self, start_vec: np.ndarray, end_vec: np.ndarray, 
-                        diff_positions: np.ndarray) -> List[List[List[int]]]:
-        """Enumerate all possible intermediate paths between two vectors."""
-        if len(diff_positions) <= 1:
-            return []  # No intermediate nodes needed
-        
+    def _enumerate_paths(self, start_vec: np.ndarray, end_vec: np.ndarray,
+                        event_groups: List[List[int]]) -> List[List[List[int]]]:
+        """Enumerate all possible intermediate paths between two vectors.
+
+        Permutes event groups (not individual bits). Each group's positions
+        are flipped simultaneously as a single AS event.
+        """
+        if len(event_groups) <= 1:
+            return []
+
         paths = []
-        
-        # Generate all possible orderings of bit flips
-        for flip_order in itertools.permutations(diff_positions):
+
+        for flip_order in itertools.permutations(range(len(event_groups))):
             path = []
             current_vec = start_vec.copy()
-            
-            # Apply flips one by one to create intermediate nodes
-            for i in range(len(flip_order) - 1):  # Exclude the last flip (goes to end_vec)
-                pos = flip_order[i]
-                current_vec[pos] = end_vec[pos]  # Flip to target value
+
+            for i in range(len(flip_order) - 1):
+                group = event_groups[flip_order[i]]
+                for pos in group:
+                    current_vec[pos] = end_vec[pos]
                 path.append(current_vec.copy().tolist())
-            
+
             paths.append(path)
-        
+
         return paths
     
     def get_is_feasible(self) -> bool:
@@ -215,5 +241,42 @@ def test_heuristic_solver():
             print(f"    Intermediate nodes: {solution}")
 
 
+def test_partial_exon():
+    """Test that partial-exon groups are handled correctly."""
+    print("\n--- Partial-exon test ---")
+
+    # Positions 0,1 form a partial-exon group in both vectors:
+    # vec1_dup=[T,F], vec2_dup=[T,F] -> event-distance 2, not 3
+    test_matrix = [
+        [1, 1, 0],  # CC1
+        [0, 0, 1],  # CC2
+    ]
+    solver = HeuristicSolver(test_matrix)
+
+    print(f"  min_additional_nodes: {solver.get_min_additional_nodes()} (expected 1)")
+    assert solver.get_min_additional_nodes() == 1, (
+        f"Expected 1 intermediate node (event-distance 2), got {solver.get_min_additional_nodes()}"
+    )
+
+    # Verify intermediate nodes flip partial-exon groups atomically
+    for sol in solver.get_all_solutions():
+        for intermediate in sol:
+            assert intermediate[0] == intermediate[1] or intermediate == [0, 0, 1] or intermediate == [1, 1, 0], (
+                f"Partial-exon group split: {intermediate}"
+            )
+
+    # No partial exon: [1,0] vs [0,1] -> positions are independent, event-distance 2
+    test_matrix_2 = [
+        [1, 0],
+        [0, 1],
+    ]
+    solver2 = HeuristicSolver(test_matrix_2)
+    print(f"  min_additional_nodes (no partial): {solver2.get_min_additional_nodes()} (expected 1)")
+    assert solver2.get_min_additional_nodes() == 1
+
+    print("  PASSED")
+
+
 if __name__ == "__main__":
     test_heuristic_solver()
+    test_partial_exon()

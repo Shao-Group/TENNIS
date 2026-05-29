@@ -2,7 +2,7 @@
 
 TENNIS is an evolution-based model to predict unannotated isoforms and refine existing transcriptome annotations without requiring additional data. 
 
-This repository accompanies the Genome Research publication "Augmenting transcriptome annotations through the lens of splicing evolution" (DOI: [10.1101/gr.277266.125](https://doi.org/10.1101/gr.277266.125)).
+This repository accompanies the Genome Research publication "Augmenting transcriptome annotations through the lens of splicing evolution" (DOI: [10.1101/gr.280661.125](https://doi.org/10.1101/gr.280661.125)).
 
 # Installation 
 [![PyPI downloads](https://img.shields.io/pepy/dt/tennis-transcriptome?style=flat&label=PyPI%20downloads&color=blue)](https://pypi.org/project/tennis-transcriptome/)
